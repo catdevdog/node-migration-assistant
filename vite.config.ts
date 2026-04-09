@@ -21,6 +21,10 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:3847',
         changeOrigin: true,
+        // Express 서버가 아직 안 떴을 때 Vite 크래시 방지
+        configure: (proxy) => {
+          proxy.on('error', () => {});
+        },
       },
     },
   },
