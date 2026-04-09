@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npx vite:*)",
+      "Bash(timeout 8 npx tsx bin/cli.ts ./test-project --no-open --dev)",
+      "Bash(npx tsx:*)",
+      "Bash(curl -s http://localhost:3847/api/project/load -X POST -H \"Content-Type: application/json\")",
+      "Bash(kill %1)",
+      "Bash(wait)",
+      "Bash(curl -s \"http://localhost:3847/api/file/read?path=src/index.js\")",
+      "Bash(curl -s http://localhost:5173/)",
+      "Bash(kill %2 %1)"
+    ]
+  }
+}
