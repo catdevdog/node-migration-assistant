@@ -66,4 +66,22 @@ router.get('/audit', async (req, res, next) => {
   }
 });
 
+/** POST /api/deps/graph — import 관계 그래프 */
+router.post('/graph', async (req, res, next) => {
+  try {
+    const projectPath = req.app.locals.projectPath as string;
+    const start = Date.now();
+
+    const { analyzeImports } = await import('../services/importAnalyzer.js');
+    const graph = await analyzeImports(projectPath);
+
+    res.json({
+      data: graph,
+      meta: { timestamp: new Date().toISOString(), duration: Date.now() - start },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

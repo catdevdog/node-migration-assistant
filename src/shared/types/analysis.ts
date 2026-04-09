@@ -25,3 +25,20 @@ export interface BatchAnalysisProgress {
   currentFile: string;
   results: FileAnalysisResult[];
 }
+
+/** 프로젝트 전체 스캔 결과 요약 */
+export interface ProjectScanSummary {
+  totalFiles: number;
+  analyzedFiles: number;
+  totalIssues: number;
+  totalFixable: number;
+  totalErrors: number;
+  totalWarnings: number;
+  totalInfos: number;
+}
+
+/** 프로젝트 전체 스캔 결과 */
+export interface ProjectScanResult {
+  results: FileAnalysisResult[];
+  summary: ProjectScanSummary;
+}

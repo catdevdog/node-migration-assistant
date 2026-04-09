@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { readFile, writeFile } from '../services/fileService.js';
 import { analyzeFile } from '../services/ruleEngine.js';
 import { getAllRules } from '../rules/registry.js';
+import { logger } from '../utils/logger.js';
 import type { ApiResponse } from '../../shared/types/api.js';
 import type { FileContent } from '../../shared/types/project.js';
 import type { FileAnalysisResult } from '../../shared/types/analysis.js';
@@ -124,6 +125,73 @@ router.get('/rules', (_req, res) => {
   };
 
   res.json(response);
+});
+
+/** POST /api/file/analyze-all — 전체 파일 일괄 분석 (SSE 진행률) */
+router.post('/analyze-all', async (req, res, next) => {
+  try {
+    const projectPath = req.app.locals.projectPath as string;
+    const { targetNodeVersion, currentNodeVersion } = req.body as {
+      targetNodeVersion?: string;
+      currentNodeVersion?: string;
+    };
+
+    // SSE 헤더
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    });
+
+    // glob으로 분석 대상 파일 수집
+    const { glob } = await import('glob');
+    const files = await glob('**/*.{js,jsx,ts,tsx,mjs,cjs}', {
+      cwd: projectPath,
+      ignore: ['node_modules/**', '.git/**', 'dist/**', 'build/**', '.next/**'],
+    });
+
+    const results: FileAnalysisResult[] = [];
+    const total = files.length;
+
+    for (let i = 0; i < files.length; i++) {
+      const filePath = files[i];
+      res.write(`data: ${JSON.stringify({
+        type: 'progress',
+        current: i + 1,
+        total,
+        currentFile: filePath,
+      })}\n\n`);
+
+      try {
+        const result = await analyzeFile(
+          projectPath,
+          filePath,
+          currentNodeVersion ?? null,
+          targetNodeVersion ?? '20',
+        );
+        results.push(result);
+      } catch (err) {
+        // 개별 파일 분석 실패는 스킵
+        logger.warn(`파일 분석 스킵: ${filePath} — ${(err as Error).message}`);
+      }
+    }
+
+    // 전체 결과 전송
+    const summary = {
+      totalFiles: total,
+      analyzedFiles: results.length,
+      totalIssues: results.reduce((sum, r) => sum + r.summary.total, 0),
+      totalFixable: results.reduce((sum, r) => sum + r.summary.fixable, 0),
+      totalErrors: results.reduce((sum, r) => sum + r.summary.errors, 0),
+      totalWarnings: results.reduce((sum, r) => sum + r.summary.warnings, 0),
+      totalInfos: results.reduce((sum, r) => sum + r.summary.infos, 0),
+    };
+
+    res.write(`data: ${JSON.stringify({ type: 'done', results, summary })}\n\n`);
+    res.end();
+  } catch (err) {
+    next(err);
+  }
 });
 
 export default router;

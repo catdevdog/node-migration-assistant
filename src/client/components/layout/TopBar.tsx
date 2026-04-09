@@ -14,7 +14,7 @@ import { Badge } from '../shared/Badge';
 
 const NAV_ITEMS: { page: ActivePage; label: string; icon: typeof FileCode }[] = [
   { page: 'editor', label: '에디터', icon: FileCode },
-  { page: 'dependencies', label: '의존성', icon: Package },
+  { page: 'dependencies', label: '프로젝트', icon: Package },
   { page: 'guide', label: '가이드', icon: BookOpen },
   { page: 'settings', label: '설정', icon: Settings },
 ];

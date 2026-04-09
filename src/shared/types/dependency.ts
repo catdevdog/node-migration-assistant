@@ -65,3 +65,48 @@ export type SortDirection = 'asc' | 'desc';
 
 /** 필터 기준 */
 export type DepFilterLevel = RiskLevel | 'all';
+
+/** Import 정보 */
+export interface ImportInfo {
+  source: string;
+  resolvedPath?: string;
+  isExternal: boolean;
+  packageName?: string;
+  line: number;
+  type: 'esm-static' | 'esm-dynamic' | 'cjs-require';
+}
+
+/** 파일별 Import 분석 */
+export interface FileImportInfo {
+  filePath: string;
+  imports: ImportInfo[];
+}
+
+/** 패키지 사용처 정보 */
+export interface PackageUsageInfo {
+  files: string[];
+  importCount: number;
+}
+
+/** Import 그래프 */
+export interface ImportGraph {
+  files: FileImportInfo[];
+  packageUsage: Record<string, PackageUsageInfo>;
+  reverseImports: Record<string, string[]>;
+  nodes: ImportGraphNode[];
+  edges: ImportGraphEdge[];
+}
+
+/** 그래프 노드 */
+export interface ImportGraphNode {
+  id: string;
+  label: string;
+  issueCount?: number;
+  type: 'file' | 'package';
+}
+
+/** 그래프 엣지 */
+export interface ImportGraphEdge {
+  source: string;
+  target: string;
+}
