@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { readFile } from '../services/fileService.js';
+import { readFile, writeFile } from '../services/fileService.js';
 import { analyzeFile } from '../services/ruleEngine.js';
 import { getAllRules } from '../rules/registry.js';
 import type { ApiResponse } from '../../shared/types/api.js';
@@ -65,6 +65,36 @@ router.post('/analyze', async (req, res, next) => {
 
     const response: ApiResponse<FileAnalysisResult> = {
       data: result,
+      meta: {
+        timestamp: new Date().toISOString(),
+        duration: Date.now() - start,
+      },
+    };
+
+    res.json(response);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** POST /api/file/write — 파일 쓰기 (수정 적용) */
+router.post('/write', async (req, res, next) => {
+  try {
+    const projectPath = req.app.locals.projectPath as string;
+    const { filePath, content } = req.body as { filePath: string; content: string };
+
+    if (!filePath || content === undefined) {
+      res.status(400).json({
+        error: { code: 'MISSING_PARAMS', message: '파일 경로와 내용이 필요합니다.' },
+      });
+      return;
+    }
+
+    const start = Date.now();
+    await writeFile(projectPath, filePath, content);
+
+    const response: ApiResponse<{ written: true }> = {
+      data: { written: true },
       meta: {
         timestamp: new Date().toISOString(),
         duration: Date.now() - start,

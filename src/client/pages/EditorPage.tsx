@@ -1,25 +1,32 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useEditorStore } from '../stores/useEditorStore';
+import { useAnalysisStore } from '../stores/useAnalysisStore';
+import { MonacoEditor } from '../components/editor/MonacoEditor';
+import { MonacoDiffEditor } from '../components/editor/MonacoDiffEditor';
 import { AnalysisPanel } from '../components/analysis/AnalysisPanel';
 import { ANALYZABLE_EXTENSIONS } from '@shared/constants';
-import { FileCode, MousePointerClick, PanelRightOpen, PanelRightClose } from 'lucide-react';
+import {
+  MousePointerClick,
+  PanelRightOpen,
+  PanelRightClose,
+  Code,
+  GitCompareArrows,
+  Save,
+  Check,
+  X,
+  Loader2,
+} from 'lucide-react';
 
 export function EditorPage() {
-  const { tabs, activeTabPath } = useEditorStore();
+  const { tabs, activeTabPath, viewMode, saving } = useEditorStore();
   const activeTab = tabs.find((t) => t.filePath === activeTabPath);
   const [showAnalysis, setShowAnalysis] = useState(true);
-  const codeRef = useRef<HTMLPreElement>(null);
 
-  // 분석 패널에서 라인 클릭 시 해당 라인으로 스크롤
-  const handleClickLine = useCallback((line: number) => {
-    if (!codeRef.current) return;
-    const lineElements = codeRef.current.querySelectorAll('.code-line');
-    const target = lineElements[line - 1];
-    if (target) {
-      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      target.classList.add('bg-yellow-900/30');
-      setTimeout(() => target.classList.remove('bg-yellow-900/30'), 2000);
-    }
+  // Monaco에서 라인 이동 (분석 패널 클릭 시)
+  const handleClickLine = useCallback((_line: number) => {
+    // Monaco 에디터에서 해당 라인으로 스크롤은 Monaco API를 통해 처리
+    // 현재는 MonacoEditor 내부에서 revealLineInCenter를 직접 호출할 수 없으므로
+    // 향후 ref를 통한 imperative 연동 예정
   }, []);
 
   if (!activeTab) {
@@ -36,6 +43,7 @@ export function EditorPage() {
 
   const ext = '.' + activeTab.filePath.split('.').pop();
   const isAnalyzable = ANALYZABLE_EXTENSIONS.includes(ext);
+  const hasSuggestion = activeTab.suggestedContent !== null;
 
   return (
     <div className="flex flex-col h-full">
@@ -51,40 +59,84 @@ export function EditorPage() {
             onClose={() => useEditorStore.getState().closeTab(tab.filePath)}
           />
         ))}
-        {/* 분석 패널 토글 */}
-        {isAnalyzable && (
-          <button
-            onClick={() => setShowAnalysis((v) => !v)}
-            className="ml-auto px-2 py-1.5 text-gray-500 hover:text-gray-300 transition-colors shrink-0"
-            title={showAnalysis ? '분석 패널 닫기' : '분석 패널 열기'}
-          >
-            {showAnalysis ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
-          </button>
-        )}
+
+        {/* 우측 버튼 그룹 */}
+        <div className="ml-auto flex items-center gap-1 px-2 shrink-0">
+          {/* diff 모드 토글 */}
+          {hasSuggestion && (
+            <div className="flex items-center border border-gray-600 rounded overflow-hidden">
+              <button
+                onClick={() => useEditorStore.getState().setViewMode('code')}
+                className={`px-2 py-1 text-xs flex items-center gap-1 transition-colors ${
+                  viewMode === 'code' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-200'
+                }`}
+                title="코드 편집"
+              >
+                <Code size={12} /> 편집
+              </button>
+              <button
+                onClick={() => useEditorStore.getState().setViewMode('diff')}
+                className={`px-2 py-1 text-xs flex items-center gap-1 transition-colors ${
+                  viewMode === 'diff' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-200'
+                }`}
+                title="변경사항 비교"
+              >
+                <GitCompareArrows size={12} /> diff
+              </button>
+            </div>
+          )}
+
+          {/* 저장 버튼 */}
+          {activeTab.isDirty && (
+            <button
+              onClick={() => useEditorStore.getState().saveFile(activeTab.filePath)}
+              disabled={saving}
+              className="px-2 py-1 text-xs flex items-center gap-1 rounded bg-green-700 hover:bg-green-600 text-white disabled:opacity-50 transition-colors"
+              title="파일 저장 (Ctrl+S)"
+            >
+              {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+              저장
+            </button>
+          )}
+
+          {/* 분석 패널 토글 */}
+          {isAnalyzable && (
+            <button
+              onClick={() => setShowAnalysis((v) => !v)}
+              className="px-2 py-1.5 text-gray-500 hover:text-gray-300 transition-colors"
+              title={showAnalysis ? '분석 패널 닫기' : '분석 패널 열기'}
+            >
+              {showAnalysis ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* 메인 영역: 코드 + 분석 패널 */}
+      {/* diff 모드일 때 수정 적용/취소 바 */}
+      {viewMode === 'diff' && hasSuggestion && (
+        <DiffActionBar filePath={activeTab.filePath} />
+      )}
+
+      {/* 메인 영역 */}
       <div className="flex-1 flex overflow-hidden">
-        {/* 코드 뷰어 — Phase 4에서 Monaco Editor로 교체 예정 */}
-        <div className="flex-1 overflow-auto bg-gray-900 p-4">
-          <div className="flex items-center gap-2 mb-3 text-xs text-gray-500">
-            <FileCode size={14} />
-            <span>{activeTab.filePath}</span>
-            <span className="text-gray-600">|</span>
-            <span>{activeTab.language}</span>
-            <span className="text-gray-600">|</span>
-            <span>{(activeTab.content.length / 1024).toFixed(1)} KB</span>
-          </div>
-          <pre ref={codeRef} className="text-sm text-gray-300 font-mono leading-relaxed">
-            {activeTab.content.split('\n').map((line, i) => (
-              <div key={i} className="code-line flex transition-colors duration-300">
-                <span className="select-none text-gray-600 w-10 text-right pr-3 shrink-0">
-                  {i + 1}
-                </span>
-                <span className="whitespace-pre-wrap">{line}</span>
-              </div>
-            ))}
-          </pre>
+        {/* 에디터 영역 */}
+        <div className="flex-1 overflow-hidden">
+          {viewMode === 'diff' && hasSuggestion ? (
+            <MonacoDiffEditor
+              original={activeTab.content}
+              modified={activeTab.suggestedContent!}
+              language={activeTab.language}
+            />
+          ) : (
+            <MonacoEditor
+              value={activeTab.content}
+              language={activeTab.language}
+              onChange={(val) =>
+                useEditorStore.getState().updateContent(activeTab.filePath, val)
+              }
+              highlightLines={getHighlightLines(activeTab.filePath)}
+            />
+          )}
         </div>
 
         {/* 분석 패널 */}
@@ -98,6 +150,40 @@ export function EditorPage() {
   );
 }
 
+/** diff 모드 액션 바 — 수정 적용 / 취소 */
+function DiffActionBar({ filePath }: { filePath: string }) {
+  return (
+    <div className="flex items-center justify-between px-4 py-2 bg-gray-800/80 border-b border-gray-700">
+      <div className="text-xs text-gray-400">
+        <GitCompareArrows size={14} className="inline mr-1.5" />
+        자동 수정 프리뷰 — 왼쪽: 현재 코드 / 오른쪽: 수정 제안
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => useEditorStore.getState().clearSuggestedContent(filePath)}
+          className="px-3 py-1 text-xs rounded border border-gray-600 text-gray-300 hover:bg-gray-700 flex items-center gap-1 transition-colors"
+        >
+          <X size={12} /> 취소
+        </button>
+        <button
+          onClick={() => useEditorStore.getState().applySuggestion(filePath)}
+          className="px-3 py-1 text-xs rounded bg-green-700 hover:bg-green-600 text-white flex items-center gap-1 transition-colors"
+        >
+          <Check size={12} /> 수정 적용
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** 분석 결과에서 하이라이트 라인 추출 */
+function getHighlightLines(filePath: string) {
+  const result = useAnalysisStore.getState().results[filePath];
+  if (!result) return undefined;
+  return result.matches.map((m) => ({ line: m.line, severity: m.severity }));
+}
+
+/** 탭 아이템 */
 function TabItem({
   label,
   active,
