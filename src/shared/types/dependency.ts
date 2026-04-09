@@ -15,6 +15,12 @@ export interface DepInfo {
   recommendation: string;
   /** dev dependency 여부 */
   isDev: boolean;
+  /** peer dependency 여부 */
+  isPeer?: boolean;
+  /** native addon (C++ 빌드) 포함 여부 */
+  hasNativeAddon?: boolean;
+  /** postinstall 스크립트 존재 여부 */
+  hasPostInstall?: boolean;
 }
 
 /** npm audit 취약점 정보 */

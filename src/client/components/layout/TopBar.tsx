@@ -9,7 +9,7 @@ import {
 import { useUIStore, type ActivePage } from '../../stores/useUIStore';
 import { useProjectStore } from '../../stores/useProjectStore';
 import { useSettingsStore } from '../../stores/useSettingsStore';
-import { SUPPORTED_NODE_VERSIONS } from '@shared/constants';
+import { SUPPORTED_NODE_VERSIONS, NODE_VERSION_INFO } from '@shared/constants';
 import { Badge } from '../shared/Badge';
 
 const NAV_ITEMS: { page: ActivePage; label: string; icon: typeof FileCode }[] = [
@@ -48,7 +48,12 @@ export function TopBar() {
       {/* 버전 선택 */}
       {projectInfo && (
         <div className="flex items-center gap-1.5 ml-2 text-xs text-gray-400">
-          <span>Node {projectInfo.currentNodeVersion ?? '?'}</span>
+          <span>
+            Node {projectInfo.currentNodeVersion ?? '?'}
+            {projectInfo.currentNodeVersion && NODE_VERSION_INFO[projectInfo.currentNodeVersion.split('.')[0]]?.isEOL && (
+              <span className="ml-1 text-yellow-400" title="EOL 버전">⚠</span>
+            )}
+          </span>
           <span className="text-gray-600">→</span>
           <select
             value={targetNodeVersion}

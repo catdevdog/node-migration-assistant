@@ -43,9 +43,30 @@ export const dirnameFilenameRule: RuleImplementation = {
     return matches;
   },
 
-  fix(content: string, _matches: RuleMatch[]): string {
-    return content
-      .replace(/\b__dirname\b/g, 'import.meta.dirname')
-      .replace(/\b__filename\b/g, 'import.meta.filename');
+  fix(content: string, matches: RuleMatch[]): string {
+    // AST에서 감지된 정확한 위치만 치환 (문자열/주석 내부 제외)
+    // 뒤에서부터 치환하여 위치 오프셋이 어긋나지 않도록 함
+    const lines = content.split('\n');
+    const sorted = [...matches].sort((a, b) => {
+      if (a.line !== b.line) return b.line - a.line;
+      return b.column - a.column;
+    });
+
+    for (const match of sorted) {
+      const lineIdx = match.line - 1;
+      if (lineIdx < 0 || lineIdx >= lines.length) continue;
+
+      const line = lines[lineIdx];
+      const col = match.column;
+      const original = match.suggestedFix?.includes('dirname') ? '__dirname' : '__filename';
+      const replacement = match.suggestedFix ?? original;
+
+      // 해당 위치에 실제로 원본 텍스트가 있는지 확인
+      if (line.substring(col, col + original.length) === original) {
+        lines[lineIdx] = line.substring(0, col) + replacement + line.substring(col + original.length);
+      }
+    }
+
+    return lines.join('\n');
   },
 };

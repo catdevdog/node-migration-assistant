@@ -89,7 +89,7 @@ export function EditorPage() {
 
         {/* 분석 패널 */}
         {isAnalyzable && showAnalysis && (
-          <div className="w-80 border-l border-gray-700 bg-gray-850 shrink-0 overflow-hidden">
+          <div className="w-[420px] border-l border-gray-700 bg-gray-850 shrink-0 overflow-hidden">
             <AnalysisPanel filePath={activeTab.filePath} onClickLine={handleClickLine} />
           </div>
         )}

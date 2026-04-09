@@ -36,7 +36,7 @@ function printBanner(projectPath: string, port: number, dev: boolean): void {
   console.log('');
   console.log(chalk.bold.cyan('  ╔══════════════════════════════════════════╗'));
   console.log(chalk.bold.cyan('  ║') + chalk.bold.white('   Node Migration Assistant v0.1.0   ') + chalk.bold.cyan('     ║'));
-  console.log(chalk.bold.cyan('  ║') + chalk.dim('   Node.js 마이그레이션 자동화 도구    ') + chalk.bold.cyan('║'));
+  console.log(chalk.bold.cyan('  ║') + chalk.dim('   Node.js 마이그레이션 워크벤치       ') + chalk.bold.cyan('║'));
   console.log(chalk.bold.cyan('  ╚══════════════════════════════════════════╝'));
   console.log('');
   console.log(chalk.dim('  프로젝트: ') + chalk.white(projectPath));
@@ -51,7 +51,7 @@ function printBanner(projectPath: string, port: number, dev: boolean): void {
 
 program
   .name('node-migrator')
-  .description('Node.js 마이그레이션 자동화 도구')
+  .description('Node.js 마이그레이션 분석 및 반자동 변환 워크벤치')
   .version('0.1.0')
   .argument('<project-path>', '마이그레이션할 프로젝트 경로')
   .option('-p, --port <number>', '서버 포트', String(DEFAULT_PORT))

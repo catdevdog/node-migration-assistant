@@ -7,7 +7,11 @@ import { logger } from '../utils/logger.js';
 
 interface NpmRegistryInfo {
   'dist-tags'?: { latest?: string };
-  versions?: Record<string, { engines?: { node?: string } }>;
+  versions?: Record<string, {
+    engines?: { node?: string };
+    scripts?: { install?: string; postinstall?: string };
+    gypfile?: boolean;
+  }>;
 }
 
 /** npm registry에서 패키지 정보 가져오기 */
@@ -29,22 +33,41 @@ async function fetchPackageInfo(name: string): Promise<NpmRegistryInfo | null> {
   }
 }
 
-/** 패키지의 최신 버전에서 engines.node 가져오기 */
+/** 패키지의 최신 버전에서 engines.node + native addon 정보 가져오기 */
 async function fetchLatestEngines(name: string): Promise<{
   latestVersion: string | null;
   enginesNode: string | null;
+  hasNativeAddon: boolean;
+  hasPostInstall: boolean;
 }> {
   const info = await fetchPackageInfo(name);
-  if (!info) return { latestVersion: null, enginesNode: null };
+  if (!info) return { latestVersion: null, enginesNode: null, hasNativeAddon: false, hasPostInstall: false };
 
   const latestVersion = info['dist-tags']?.latest ?? null;
   let enginesNode: string | null = null;
+  let hasNativeAddon = false;
+  let hasPostInstall = false;
 
-  if (latestVersion && info.versions?.[latestVersion]?.engines?.node) {
-    enginesNode = info.versions[latestVersion].engines!.node!;
+  if (latestVersion && info.versions?.[latestVersion]) {
+    const versionInfo = info.versions[latestVersion];
+    if (versionInfo.engines?.node) {
+      enginesNode = versionInfo.engines.node;
+    }
+    // native addon 감지: gypfile 필드 또는 install 스크립트에 node-gyp 포함
+    if (versionInfo.gypfile) {
+      hasNativeAddon = true;
+    }
+    if (versionInfo.scripts?.install?.includes('node-gyp') ||
+        versionInfo.scripts?.install?.includes('prebuild') ||
+        versionInfo.scripts?.install?.includes('cmake')) {
+      hasNativeAddon = true;
+    }
+    if (versionInfo.scripts?.postinstall) {
+      hasPostInstall = true;
+    }
   }
 
-  return { latestVersion, enginesNode };
+  return { latestVersion, enginesNode, hasNativeAddon, hasPostInstall };
 }
 
 /** 위험 등급 판정 */
@@ -150,23 +173,35 @@ function assessRisk(params: {
   };
 }
 
-/** package.json에서 의존성 목록 추출 */
+/** package.json에서 의존성 목록 추출 (peerDependencies 포함) */
 function extractDeps(
   pkg: Record<string, unknown>,
-): Array<{ name: string; version: string; isDev: boolean }> {
-  const result: Array<{ name: string; version: string; isDev: boolean }> = [];
+): Array<{ name: string; version: string; isDev: boolean; isPeer: boolean }> {
+  const result: Array<{ name: string; version: string; isDev: boolean; isPeer: boolean }> = [];
+  const seen = new Set<string>();
 
   const deps = pkg.dependencies as Record<string, string> | undefined;
   const devDeps = pkg.devDependencies as Record<string, string> | undefined;
+  const peerDeps = pkg.peerDependencies as Record<string, string> | undefined;
 
   if (deps) {
     for (const [name, version] of Object.entries(deps)) {
-      result.push({ name, version, isDev: false });
+      result.push({ name, version, isDev: false, isPeer: false });
+      seen.add(name);
     }
   }
   if (devDeps) {
     for (const [name, version] of Object.entries(devDeps)) {
-      result.push({ name, version, isDev: true });
+      result.push({ name, version, isDev: true, isPeer: false });
+      seen.add(name);
+    }
+  }
+  // peerDependencies 중 dependencies/devDependencies에 없는 것만 추가
+  if (peerDeps) {
+    for (const [name, version] of Object.entries(peerDeps)) {
+      if (!seen.has(name)) {
+        result.push({ name, version, isDev: false, isPeer: true });
+      }
     }
   }
 
@@ -195,7 +230,8 @@ export async function analyzeDependencies(
     const batch = depList.slice(i, i + BATCH_SIZE);
     const batchResults = await Promise.all(
       batch.map(async (dep) => {
-        const { latestVersion, enginesNode } = await fetchLatestEngines(dep.name);
+        const { latestVersion, enginesNode, hasNativeAddon, hasPostInstall } =
+          await fetchLatestEngines(dep.name);
         const cveCount = auditVulnMap?.get(dep.name) ?? 0;
 
         const { level, reason, recommendation } = assessRisk({
@@ -206,16 +242,30 @@ export async function analyzeDependencies(
           cveCount,
         });
 
+        // native addon이 있으면 위험 등급 상향 가능
+        let finalLevel = level;
+        let finalReason = reason;
+        let finalRec = recommendation;
+
+        if (hasNativeAddon && finalLevel === 'safe') {
+          finalLevel = 'review';
+          finalReason = 'native addon 포함 — Node 버전 변경 시 재빌드 필요';
+          finalRec = '업그레이드 후 npm rebuild 실행 필요';
+        }
+
         const info: DepInfo = {
           name: dep.name,
           currentVersion: dep.version,
           latestVersion,
           enginesNode,
-          riskLevel: level,
-          riskReason: reason,
+          riskLevel: finalLevel,
+          riskReason: finalReason,
           cveCount,
-          recommendation,
+          recommendation: finalRec,
           isDev: dep.isDev,
+          isPeer: dep.isPeer,
+          hasNativeAddon,
+          hasPostInstall,
         };
 
         return info;

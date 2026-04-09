@@ -1,24 +1,56 @@
-/** 지원하는 Node.js LTS 버전 목록 */
-export const SUPPORTED_NODE_VERSIONS = ['16', '18', '20', '22'] as const;
+/** 마이그레이션 타겟으로 선택 가능한 Node.js LTS 버전 (현재 활성 LTS만) */
+export const TARGET_NODE_VERSIONS = ['20', '22', '24'] as const;
 
-export type SupportedNodeVersion = (typeof SUPPORTED_NODE_VERSIONS)[number];
+/** 소스(감지 대상)로 인식하는 Node.js 버전 (EOL 포함) */
+export const ALL_NODE_VERSIONS = ['12', '14', '16', '18', '20', '22', '24'] as const;
+
+/** 하위 호환: 기존 코드에서 사용하는 별칭 */
+export const SUPPORTED_NODE_VERSIONS = TARGET_NODE_VERSIONS;
+
+export type TargetNodeVersion = (typeof TARGET_NODE_VERSIONS)[number];
+export type SupportedNodeVersion = TargetNodeVersion;
 
 /** Node 버전별 주요 정보 */
-export const NODE_VERSION_INFO: Record<
-  SupportedNodeVersion,
-  {
-    codename: string;
-    v8Version: string;
-    ltsStart: string;
-    eol: string;
-    features: string[];
-  }
-> = {
+export interface NodeVersionInfo {
+  codename: string;
+  v8Version: string;
+  ltsStart: string;
+  eol: string;
+  isEOL: boolean;
+  features: string[];
+}
+
+export const NODE_VERSION_INFO: Record<string, NodeVersionInfo> = {
+  '12': {
+    codename: 'Erbium',
+    v8Version: '7.8',
+    ltsStart: '2019-10-21',
+    eol: '2022-04-30',
+    isEOL: true,
+    features: [
+      'ES2019 완전 지원',
+      'Worker Threads 안정화',
+      'Diagnostic Reports',
+    ],
+  },
+  '14': {
+    codename: 'Fermium',
+    v8Version: '8.4',
+    ltsStart: '2020-10-27',
+    eol: '2023-04-30',
+    isEOL: true,
+    features: [
+      'Optional Chaining/Nullish Coalescing',
+      'Diagnostic Channel',
+      'Top-level Await 실험적',
+    ],
+  },
   '16': {
     codename: 'Gallium',
     v8Version: '9.4',
     ltsStart: '2021-10-26',
     eol: '2023-09-11',
+    isEOL: true,
     features: [
       'Apple Silicon 네이티브 지원',
       'npm 8',
@@ -31,6 +63,7 @@ export const NODE_VERSION_INFO: Record<
     v8Version: '10.2',
     ltsStart: '2022-10-25',
     eol: '2025-04-30',
+    isEOL: true,
     features: [
       'fetch API 내장',
       'Test runner 모듈',
@@ -44,6 +77,7 @@ export const NODE_VERSION_INFO: Record<
     v8Version: '11.3',
     ltsStart: '2023-10-24',
     eol: '2026-04-30',
+    isEOL: false,
     features: [
       '안정화된 Test runner',
       'import.meta.dirname/filename',
@@ -57,12 +91,27 @@ export const NODE_VERSION_INFO: Record<
     v8Version: '12.4',
     ltsStart: '2024-10-29',
     eol: '2027-04-30',
+    isEOL: false,
     features: [
       'require(esm) 지원',
       'WebSocket 클라이언트',
       'glob/globSync 내장',
       'V8 Maglev 컴파일러',
       'node --run 명령어',
+    ],
+  },
+  '24': {
+    codename: 'TBD',
+    v8Version: '13.6',
+    ltsStart: '2025-10-28',
+    eol: '2028-04-30',
+    isEOL: false,
+    features: [
+      'URLPattern API 안정화',
+      'Permission 모델 안정화',
+      'Web Crypto 확장',
+      'net.BlockList 개선',
+      'AsyncLocalStorage 성능 개선',
     ],
   },
 };

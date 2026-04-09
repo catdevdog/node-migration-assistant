@@ -1,10 +1,12 @@
 import path from 'path';
+import semver from 'semver';
 import { parseCode } from './astService.js';
 import { getRulesForFile } from '../rules/registry.js';
 import { readFile } from './fileService.js';
 import type { FileAnalysisResult } from '../../shared/types/analysis.js';
 import type { RuleMatch } from '../../shared/types/rule.js';
 import type { RuleContext } from '../rules/types.js';
+import type { RuleImplementation } from '../rules/types.js';
 import { logger } from '../utils/logger.js';
 
 /** 단일 파일 분석 */
@@ -26,8 +28,9 @@ export async function analyzeFile(
     return buildResult(relativePath, [], undefined, Date.now() - start);
   }
 
-  // 적용 가능한 규칙 필터링
-  const rules = getRulesForFile(relativePath);
+  // 적용 가능한 규칙 필터링 (확장자 + 타겟 버전)
+  const allRules = getRulesForFile(relativePath);
+  const rules = allRules.filter((rule) => isRuleApplicable(rule, targetNodeVersion));
 
   // 규칙 컨텍스트 생성
   const context: RuleContext = {
@@ -72,6 +75,19 @@ export async function analyzeFile(
   }
 
   return buildResult(relativePath, allMatches, fixedContent, Date.now() - start);
+}
+
+/** 규칙의 minTargetVersion이 현재 타겟 버전 이하인지 확인 */
+function isRuleApplicable(rule: RuleImplementation, targetNodeVersion: string): boolean {
+  if (!rule.minTargetVersion) return true;
+
+  // major 버전 비교 (예: '20' >= '20' → true, '18' >= '20' → false)
+  const targetMajor = semver.coerce(targetNodeVersion);
+  const minMajor = semver.coerce(rule.minTargetVersion);
+
+  if (!targetMajor || !minMajor) return true;
+
+  return semver.gte(targetMajor, minMajor);
 }
 
 function buildResult(
