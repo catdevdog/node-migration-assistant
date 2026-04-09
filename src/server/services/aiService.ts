@@ -93,37 +93,34 @@ function buildSystemPrompt(
   type: string,
   context: Record<string, any> = {},
 ): string {
-  const base = `You are a Node.js migration expert assistant. You help developers upgrade their Node.js projects safely.
-Always respond in Korean (한국어).
-When suggesting code changes, provide the complete modified code.
-Be specific about which Node.js version features you're referencing.`;
+  const base = `Node.js 마이그레이션 전문가. 한국어로 응답.
+규칙:
+- 마크다운 문법 사용 금지 (**, ##, - 등). 평문으로 작성.
+- 수정된 코드는 반드시 \`\`\`언어 코드블록으로 제공. 파일 전체 코드를 포함할 것.
+- 설명은 핵심만 간결하게. 불필요한 인사/서론/반복 금지.
+- Node.js 버전별 차이를 명시.`;
+
+  const target = context.targetNodeVersion ?? '20';
+  const current = context.currentNodeVersion ?? '알 수 없음';
 
   const typePrompts: Record<string, string> = {
     analyze: `${base}
-현재 Node.js ${context.currentNodeVersion ?? '알 수 없음'} → ${context.targetNodeVersion ?? '20'} 마이그레이션 중입니다.
-아래 코드에서 발견된 이슈를 분석하고, 안전한 수정 방법을 제안하세요.
-각 이슈에 대해: 1) 문제 설명 2) 위험도 3) 수정 방법을 설명하세요.`,
+Node ${current} → ${target} 마이그레이션. 이슈별로: 문제, 위험도, 수정코드 제공.`,
 
     rewrite: `${base}
-파일 전체를 Node.js ${context.targetNodeVersion ?? '20'}에 맞게 현대적으로 재작성하세요.
-변경 사항마다 // CHANGED: 주석을 달아주세요.
-기존 기능을 변경하지 않고, 동일한 동작을 보장해야 합니다.`,
+Node ${target}에 맞게 파일 전체 재작성. 변경마다 // CHANGED: 주석. 동일 동작 보장.`,
 
     'replace-library': `${base}
-더 이상 사용되지 않는 라이브러리를 현대적인 대안으로 교체하는 방법을 제안하세요.
-마이그레이션 단계를 상세히 설명하고, 코드 예시를 제공하세요.`,
+deprecated 라이브러리를 현대적 대안으로 교체. 단계별 코드 제공.`,
 
     cascade: `${base}
-파일 수정으로 인해 영향받을 수 있는 연관 파일들을 분석하세요.
-각 파일에 대해: 1) 영향 범위 2) 필요한 변경 사항을 설명하세요.`,
+파일 수정의 연쇄 영향 분석. 영향 파일별 필요 변경사항 제시.`,
 
     'explain-error': `${base}
-Node.js 마이그레이션 과정에서 발생한 에러를 분석하고 해결 방법을 제시하세요.
-에러 원인, 영향 범위, 단계별 해결 방법을 설명하세요.`,
+마이그레이션 에러 분석. 원인, 해결방법 코드 제공.`,
 
     'suggest-improvements': `${base}
-코드를 분석하여 Node.js ${context.targetNodeVersion ?? '20'}에서 활용 가능한 개선 사항을 제안하세요.
-성능, 보안, 가독성, 최신 API 활용 관점에서 제안하세요.`,
+Node ${target}에서 활용 가능한 개선사항. 성능/보안/최신API 관점.`,
   };
 
   return typePrompts[type] ?? base;

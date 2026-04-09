@@ -1,8 +1,9 @@
 import { useRef, useEffect, useState, useCallback, useMemo, type KeyboardEvent } from 'react';
 import { useAIStore } from '../../stores/useAIStore';
 import { useSettingsStore } from '../../stores/useSettingsStore';
+import { useEditorStore } from '../../stores/useEditorStore';
 import { streamAIRequest, estimateTokens } from '../../api/ai';
-import { Send, Loader2, Coins, User, Bot, Code, ChevronDown } from 'lucide-react';
+import { Send, Loader2, Coins, User, Bot, Code, ChevronDown, Play, Check } from 'lucide-react';
 import type { AIChatMessage, AIRequestType, AITokenEstimate } from '@shared/types/ai';
 
 /** 요청 유형별 레이블 */
@@ -362,7 +363,7 @@ function MessageBubble({ message }: { message: AIChatMessage }) {
   );
 }
 
-/** 메시지 콘텐츠 렌더러 — 코드 블록을 감지하여 별도 스타일 적용 */
+/** 메시지 콘텐츠 렌더러 — 코드 블록 + 기본 텍스트 포매팅 */
 function MessageContent({ content }: { content: string }) {
   const parts = useMemo(() => parseMessageContent(content), [content]);
 
@@ -370,23 +371,95 @@ function MessageContent({ content }: { content: string }) {
     <>
       {parts.map((part, i) =>
         part.type === 'code' ? (
-          <div key={i} className="my-2 rounded overflow-hidden">
-            {part.language && (
-              <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-950 text-[10px] text-gray-500 border-b border-gray-700">
-                <Code size={10} />
-                <span>{part.language}</span>
-              </div>
-            )}
-            <pre className="px-3 py-2 bg-gray-900 text-xs font-mono text-gray-300 overflow-x-auto custom-scrollbar leading-relaxed">
-              <code>{part.content}</code>
-            </pre>
-          </div>
+          <CodeBlock key={i} code={part.content} language={part.language} />
         ) : (
-          <span key={i} className="whitespace-pre-wrap">{part.content}</span>
+          <span key={i} className="whitespace-pre-wrap">
+            {renderInlineFormatting(part.content)}
+          </span>
         ),
       )}
     </>
   );
+}
+
+/** 코드 블록 + "코드 적용" 버튼 */
+function CodeBlock({ code, language }: { code: string; language?: string }) {
+  const [applied, setApplied] = useState(false);
+  const activeTabPath = useEditorStore((s) => s.activeTabPath);
+
+  /** AI 수정 코드를 에디터에 diff 프리뷰로 적용 */
+  const handleApply = () => {
+    if (!activeTabPath) return;
+    useEditorStore.getState().setSuggestedContent(activeTabPath, code.trim());
+    setApplied(true);
+    setTimeout(() => setApplied(false), 2000);
+  };
+
+  // 코드가 5줄 이상이면 파일 수정 코드로 간주 → 적용 버튼 표시
+  const isApplicable = activeTabPath && code.trim().split('\n').length >= 5;
+
+  return (
+    <div className="my-2 rounded overflow-hidden border border-gray-700/50">
+      <div className="flex items-center justify-between px-3 py-1 bg-gray-950 text-[10px] text-gray-500 border-b border-gray-700">
+        <div className="flex items-center gap-1.5">
+          <Code size={10} />
+          <span>{language || 'code'}</span>
+        </div>
+        {isApplicable && (
+          <button
+            onClick={handleApply}
+            className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] transition-colors ${
+              applied
+                ? 'bg-green-700/50 text-green-300'
+                : 'bg-purple-700/40 hover:bg-purple-600/50 text-purple-300'
+            }`}
+          >
+            {applied ? <><Check size={10} /> 적용됨</> : <><Play size={10} /> 코드 적용</>}
+          </button>
+        )}
+      </div>
+      <pre className="px-3 py-2 bg-gray-900 text-xs font-mono text-gray-300 overflow-x-auto custom-scrollbar leading-relaxed max-h-[400px]">
+        <code>{code}</code>
+      </pre>
+    </div>
+  );
+}
+
+/** 인라인 텍스트 포매팅 — `인라인코드`, **볼드** 처리 */
+function renderInlineFormatting(text: string): (string | JSX.Element)[] {
+  const result: (string | JSX.Element)[] = [];
+  // `인라인코드` 와 **볼드** 처리
+  const regex = /`([^`]+)`|\*\*([^*]+)\*\*/g;
+  let lastIdx = 0;
+  let m: RegExpExecArray | null;
+
+  while ((m = regex.exec(text)) !== null) {
+    if (m.index > lastIdx) {
+      result.push(text.slice(lastIdx, m.index));
+    }
+    if (m[1]) {
+      // 인라인 코드
+      result.push(
+        <code key={m.index} className="px-1 py-0.5 bg-gray-700/50 rounded text-xs font-mono text-purple-300">
+          {m[1]}
+        </code>,
+      );
+    } else if (m[2]) {
+      // 볼드
+      result.push(
+        <strong key={m.index} className="font-semibold text-gray-100">
+          {m[2]}
+        </strong>,
+      );
+    }
+    lastIdx = m.index + m[0].length;
+  }
+
+  if (lastIdx < text.length) {
+    result.push(text.slice(lastIdx));
+  }
+
+  return result.length > 0 ? result : [text];
 }
 
 /** 메시지 텍스트에서 ```코드``` 블록 파싱 */
@@ -403,27 +476,21 @@ function parseMessageContent(content: string): ContentPart[] {
   let match: RegExpExecArray | null;
 
   while ((match = codeBlockRegex.exec(content)) !== null) {
-    /* 코드 블록 앞의 텍스트 */
     if (match.index > lastIndex) {
       parts.push({ type: 'text', content: content.slice(lastIndex, match.index) });
     }
-
-    /* 코드 블록 */
     parts.push({
       type: 'code',
       language: match[1] || undefined,
       content: match[2],
     });
-
     lastIndex = match.index + match[0].length;
   }
 
-  /* 마지막 텍스트 */
   if (lastIndex < content.length) {
     parts.push({ type: 'text', content: content.slice(lastIndex) });
   }
 
-  /* 내용이 없으면 전체를 텍스트로 */
   if (parts.length === 0) {
     parts.push({ type: 'text', content });
   }
