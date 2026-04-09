@@ -1,9 +1,26 @@
+import { useState, useRef, useCallback } from 'react';
 import { useEditorStore } from '../stores/useEditorStore';
-import { FileCode, MousePointerClick } from 'lucide-react';
+import { AnalysisPanel } from '../components/analysis/AnalysisPanel';
+import { ANALYZABLE_EXTENSIONS } from '@shared/constants';
+import { FileCode, MousePointerClick, PanelRightOpen, PanelRightClose } from 'lucide-react';
 
 export function EditorPage() {
   const { tabs, activeTabPath } = useEditorStore();
   const activeTab = tabs.find((t) => t.filePath === activeTabPath);
+  const [showAnalysis, setShowAnalysis] = useState(true);
+  const codeRef = useRef<HTMLPreElement>(null);
+
+  // 분석 패널에서 라인 클릭 시 해당 라인으로 스크롤
+  const handleClickLine = useCallback((line: number) => {
+    if (!codeRef.current) return;
+    const lineElements = codeRef.current.querySelectorAll('.code-line');
+    const target = lineElements[line - 1];
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target.classList.add('bg-yellow-900/30');
+      setTimeout(() => target.classList.remove('bg-yellow-900/30'), 2000);
+    }
+  }, []);
 
   if (!activeTab) {
     return (
@@ -16,6 +33,9 @@ export function EditorPage() {
       </div>
     );
   }
+
+  const ext = '.' + activeTab.filePath.split('.').pop();
+  const isAnalyzable = ANALYZABLE_EXTENSIONS.includes(ext);
 
   return (
     <div className="flex flex-col h-full">
@@ -31,21 +51,48 @@ export function EditorPage() {
             onClose={() => useEditorStore.getState().closeTab(tab.filePath)}
           />
         ))}
+        {/* 분석 패널 토글 */}
+        {isAnalyzable && (
+          <button
+            onClick={() => setShowAnalysis((v) => !v)}
+            className="ml-auto px-2 py-1.5 text-gray-500 hover:text-gray-300 transition-colors shrink-0"
+            title={showAnalysis ? '분석 패널 닫기' : '분석 패널 열기'}
+          >
+            {showAnalysis ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
+          </button>
+        )}
       </div>
 
-      {/* 에디터 영역 — Phase 4에서 Monaco Editor로 교체 예정 */}
-      <div className="flex-1 overflow-auto bg-gray-900 p-4">
-        <div className="flex items-center gap-2 mb-3 text-xs text-gray-500">
-          <FileCode size={14} />
-          <span>{activeTab.filePath}</span>
-          <span className="text-gray-600">|</span>
-          <span>{activeTab.language}</span>
-          <span className="text-gray-600">|</span>
-          <span>{(activeTab.content.length / 1024).toFixed(1)} KB</span>
+      {/* 메인 영역: 코드 + 분석 패널 */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* 코드 뷰어 — Phase 4에서 Monaco Editor로 교체 예정 */}
+        <div className="flex-1 overflow-auto bg-gray-900 p-4">
+          <div className="flex items-center gap-2 mb-3 text-xs text-gray-500">
+            <FileCode size={14} />
+            <span>{activeTab.filePath}</span>
+            <span className="text-gray-600">|</span>
+            <span>{activeTab.language}</span>
+            <span className="text-gray-600">|</span>
+            <span>{(activeTab.content.length / 1024).toFixed(1)} KB</span>
+          </div>
+          <pre ref={codeRef} className="text-sm text-gray-300 font-mono leading-relaxed">
+            {activeTab.content.split('\n').map((line, i) => (
+              <div key={i} className="code-line flex transition-colors duration-300">
+                <span className="select-none text-gray-600 w-10 text-right pr-3 shrink-0">
+                  {i + 1}
+                </span>
+                <span className="whitespace-pre-wrap">{line}</span>
+              </div>
+            ))}
+          </pre>
         </div>
-        <pre className="text-sm text-gray-300 font-mono whitespace-pre-wrap leading-relaxed">
-          {activeTab.content}
-        </pre>
+
+        {/* 분석 패널 */}
+        {isAnalyzable && showAnalysis && (
+          <div className="w-80 border-l border-gray-700 bg-gray-850 shrink-0 overflow-hidden">
+            <AnalysisPanel filePath={activeTab.filePath} onClickLine={handleClickLine} />
+          </div>
+        )}
       </div>
     </div>
   );
