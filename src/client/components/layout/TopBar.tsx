@@ -1,7 +1,7 @@
 import {
   PanelLeftClose,
   PanelLeftOpen,
-  LayoutDashboard,
+  BookOpen,
   Package,
   FileCode,
   Settings,
@@ -15,7 +15,7 @@ import { Badge } from '../shared/Badge';
 const NAV_ITEMS: { page: ActivePage; label: string; icon: typeof FileCode }[] = [
   { page: 'editor', label: '에디터', icon: FileCode },
   { page: 'dependencies', label: '의존성', icon: Package },
-  { page: 'dashboard', label: '대시보드', icon: LayoutDashboard },
+  { page: 'guide', label: '가이드', icon: BookOpen },
   { page: 'settings', label: '설정', icon: Settings },
 ];
 

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Loader2, RefreshCw, Search, Bot, Sparkles } from 'lucide-react';
+import { Loader2, RefreshCw, Bot, Sparkles } from 'lucide-react';
 import { useAnalysisStore } from '../../stores/useAnalysisStore';
 import { useSettingsStore } from '../../stores/useSettingsStore';
 import { useProjectStore } from '../../stores/useProjectStore';
@@ -92,6 +92,17 @@ export function AnalysisPanel({ filePath, onClickLine }: AnalysisPanelProps) {
     }
   }, [filePath]);
 
+  // fixable 이슈가 있으면 자동으로 diff 프리뷰 표시
+  useEffect(() => {
+    if (result?.fixedContent) {
+      // 이미 suggestedContent가 설정되어 있으면 스킵
+      const tab = useEditorStore.getState().tabs.find(t => t.filePath === filePath);
+      if (tab && !tab.suggestedContent) {
+        useEditorStore.getState().setSuggestedContent(filePath, result.fixedContent);
+      }
+    }
+  }, [result?.fixedContent, filePath]);
+
   if (!isAnalyzable) {
     return (
       <div className="flex items-center justify-center h-full text-gray-500 text-sm">
@@ -125,14 +136,9 @@ export function AnalysisPanel({ filePath, onClickLine }: AnalysisPanelProps) {
 
   if (!result) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-500">
-        <Search size={24} />
-        <button
-          onClick={() => analyzeFile(filePath, targetNodeVersion, currentNodeVersion ?? undefined)}
-          className="flex items-center gap-1 px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white text-sm transition-colors"
-        >
-          <Search size={14} /> 분석 실행
-        </button>
+      <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-400 text-sm">
+        <Loader2 size={20} className="animate-spin" />
+        <span>분석 준비 중...</span>
       </div>
     );
   }

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { KeyRound, Check, Moon, Sun } from 'lucide-react';
 import { useSettingsStore } from '../stores/useSettingsStore';
-import { SUPPORTED_NODE_VERSIONS } from '@shared/constants';
 import { Button } from '../components/shared/Button';
 
 export function SettingsPage() {
@@ -9,8 +8,6 @@ export function SettingsPage() {
     apiKey,
     setApiKey,
     clearApiKey,
-    targetNodeVersion,
-    setTargetNodeVersion,
     theme,
     toggleTheme,
   } = useSettingsStore();
@@ -37,6 +34,15 @@ export function SettingsPage() {
         <h2 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
           <KeyRound size={16} />
           Anthropic API 키
+          {apiKey ? (
+            <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-green-900/40 text-green-400 border border-green-800/50">
+              연결됨
+            </span>
+          ) : (
+            <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-red-900/40 text-red-400 border border-red-800/50">
+              미설정
+            </span>
+          )}
         </h2>
         <div className="flex gap-2">
           <input
@@ -53,22 +59,11 @@ export function SettingsPage() {
         <p className="text-xs text-gray-500">
           브라우저 로컬 스토리지에만 저장됩니다.
         </p>
-      </section>
-
-      {/* 목표 Node 버전 */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-gray-300">목표 Node.js 버전</h2>
-        <select
-          value={targetNodeVersion}
-          onChange={(e) => setTargetNodeVersion(e.target.value)}
-          className="px-3 py-2 bg-gray-800 border border-gray-600 rounded text-sm text-gray-200 focus:outline-none focus:border-blue-500"
-        >
-          {SUPPORTED_NODE_VERSIONS.map((v) => (
-            <option key={v} value={v}>
-              Node {v} LTS
-            </option>
-          ))}
-        </select>
+        {!apiKey && (
+          <p className="text-xs text-yellow-400 mt-2">
+            AI 분석 기능을 사용하려면 Anthropic API 키를 입력하세요.
+          </p>
+        )}
       </section>
 
       {/* 테마 */}
