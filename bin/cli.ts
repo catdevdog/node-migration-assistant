@@ -11,23 +11,28 @@ import { DEFAULT_PORT } from '../src/shared/constants.js';
 
 const program = new Command();
 
-/** 사용 가능한 포트 찾기 */
-function findPort(startPort: number): Promise<number> {
-  return new Promise((resolve, reject) => {
+/** 포트가 사용 가능한지 확인 */
+function isPortFree(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
     const server = net.createServer();
     server.unref();
-    server.on('error', () => {
-      // 포트 사용 중이면 다음 포트 시도
-      resolve(findPort(startPort + 1));
-    });
-    server.listen(startPort, '127.0.0.1', () => {
-      server.close(() => resolve(startPort));
+    server.on('error', () => resolve(false));
+    server.listen(port, '127.0.0.1', () => {
+      server.close(() => resolve(true));
     });
   });
 }
 
+/** 사용 가능한 포트 찾기 (최대 10번 시도) */
+async function findPort(startPort: number): Promise<number> {
+  for (let p = startPort; p < startPort + 10; p++) {
+    if (await isPortFree(p)) return p;
+  }
+  throw new Error(`포트 ${startPort}~${startPort + 9} 모두 사용 중입니다.`);
+}
+
 /** 배너 출력 */
-function printBanner(projectPath: string, port: number): void {
+function printBanner(projectPath: string, port: number, dev: boolean): void {
   console.log('');
   console.log(chalk.bold.cyan('  ╔══════════════════════════════════════════╗'));
   console.log(chalk.bold.cyan('  ║') + chalk.bold.white('   Node Migration Assistant v0.1.0   ') + chalk.bold.cyan('     ║'));
@@ -35,7 +40,10 @@ function printBanner(projectPath: string, port: number): void {
   console.log(chalk.bold.cyan('  ╚══════════════════════════════════════════╝'));
   console.log('');
   console.log(chalk.dim('  프로젝트: ') + chalk.white(projectPath));
-  console.log(chalk.dim('  서버:     ') + chalk.green(`http://localhost:${port}`));
+  console.log(chalk.dim('  API 서버: ') + chalk.green(`http://localhost:${port}`));
+  if (dev) {
+    console.log(chalk.dim('  클라이언트:') + chalk.green(` http://localhost:5173`) + chalk.dim(' (Vite 프록시 → :' + port + ')'));
+  }
   console.log('');
   console.log(chalk.dim('  종료하려면 Ctrl+C를 누르세요.'));
   console.log('');
@@ -62,12 +70,27 @@ program
       process.exit(1);
     }
 
-    // 포트 찾기
     const requestedPort = parseInt(opts.port, 10);
-    const port = await findPort(requestedPort);
+    let port: number;
 
-    if (port !== requestedPort) {
-      console.log(chalk.yellow(`포트 ${requestedPort}이(가) 사용 중입니다. ${port}을(를) 사용합니다.`));
+    if (opts.dev) {
+      // 개발 모드: Vite 프록시와 포트가 일치해야 하므로 고정 포트 사용
+      if (await isPortFree(requestedPort)) {
+        port = requestedPort;
+      } else {
+        console.error(chalk.red(`에러: 포트 ${requestedPort}이(가) 사용 중입니다.`));
+        console.error(chalk.yellow(`  Vite 프록시가 :${requestedPort}을(를) 사용하므로 개발 모드에서는 포트를 변경할 수 없습니다.`));
+        console.error(chalk.yellow(`  해결: 기존 프로세스를 종료하거나 --port 옵션으로 다른 포트를 지정하세요.`));
+        console.error(chalk.dim(`  Windows: netstat -ano | findstr ${requestedPort}`));
+        console.error(chalk.dim(`  taskkill /PID <PID> /F`));
+        process.exit(1);
+      }
+    } else {
+      // 프로덕션 모드: 자동 포트 탐색
+      port = await findPort(requestedPort);
+      if (port !== requestedPort) {
+        console.log(chalk.yellow(`포트 ${requestedPort}이(가) 사용 중입니다. ${port}을(를) 사용합니다.`));
+      }
     }
 
     // 서버 시작
@@ -77,7 +100,7 @@ program
       dev: opts.dev,
     });
 
-    printBanner(resolvedPath, port);
+    printBanner(resolvedPath, port, opts.dev);
 
     // 브라우저 열기
     if (opts.open) {
