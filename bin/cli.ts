@@ -109,15 +109,25 @@ program
     }
 
     // 그레이스풀 셧다운
+    let shuttingDown = false;
     const shutdown = () => {
+      if (shuttingDown) return;
+      shuttingDown = true;
       console.log(chalk.dim('\n서버를 종료합니다...'));
       server.close(() => {
         process.exit(0);
       });
+      // 3초 내에 안 닫히면 강제 종료
+      setTimeout(() => {
+        console.log(chalk.yellow('강제 종료합니다.'));
+        process.exit(1);
+      }, 3000).unref();
     };
 
     process.on('SIGINT', shutdown);
     process.on('SIGTERM', shutdown);
+    // Windows에서 터미널 닫힘 감지
+    process.on('SIGHUP', shutdown);
   });
 
 program.parse();

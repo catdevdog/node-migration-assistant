@@ -1,9 +1,11 @@
 import { useState, useCallback } from 'react';
 import { useEditorStore } from '../stores/useEditorStore';
 import { useAnalysisStore } from '../stores/useAnalysisStore';
+import { useAIStore } from '../stores/useAIStore';
 import { MonacoEditor } from '../components/editor/MonacoEditor';
 import { MonacoDiffEditor } from '../components/editor/MonacoDiffEditor';
 import { AnalysisPanel } from '../components/analysis/AnalysisPanel';
+import { AIPanel } from '../components/ai/AIPanel';
 import { ANALYZABLE_EXTENSIONS } from '@shared/constants';
 import {
   MousePointerClick,
@@ -15,12 +17,14 @@ import {
   Check,
   X,
   Loader2,
+  Bot,
 } from 'lucide-react';
 
 export function EditorPage() {
   const { tabs, activeTabPath, viewMode, saving } = useEditorStore();
   const activeTab = tabs.find((t) => t.filePath === activeTabPath);
   const [showAnalysis, setShowAnalysis] = useState(true);
+  const isPanelOpen = useAIStore((s) => s.isPanelOpen);
 
   // Monaco에서 라인 이동 (분석 패널 클릭 시)
   const handleClickLine = useCallback((_line: number) => {
@@ -99,6 +103,17 @@ export function EditorPage() {
             </button>
           )}
 
+          {/* AI 패널 토글 */}
+          <button
+            onClick={() => useAIStore.getState().togglePanel()}
+            className={`px-2 py-1.5 transition-colors ${
+              isPanelOpen ? 'text-purple-400' : 'text-gray-500 hover:text-gray-300'
+            }`}
+            title="AI 어시스턴트"
+          >
+            <Bot size={16} />
+          </button>
+
           {/* 분석 패널 토글 */}
           {isAnalyzable && (
             <button
@@ -145,6 +160,9 @@ export function EditorPage() {
             <AnalysisPanel filePath={activeTab.filePath} onClickLine={handleClickLine} />
           </div>
         )}
+
+        {/* AI 패널 */}
+        <AIPanel />
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type ActivePage = 'editor' | 'dependencies' | 'dashboard' | 'settings';
+export type ActivePage = 'editor' | 'dependencies' | 'dashboard' | 'settings' | 'guide';
 
 interface UIState {
   sidebarOpen: boolean;

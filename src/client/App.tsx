@@ -6,6 +6,7 @@ import { EditorPage } from './pages/EditorPage';
 import { DependencyPage } from './pages/DependencyPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { GuidePage } from './pages/GuidePage';
 import { useProjectStore } from './stores/useProjectStore';
 import { useSettingsStore } from './stores/useSettingsStore';
 import { useUIStore } from './stores/useUIStore';
@@ -22,6 +23,8 @@ function PageRouter() {
       return <DashboardPage />;
     case 'settings':
       return <SettingsPage />;
+    case 'guide':
+      return <GuidePage />;
     default:
       return <EditorPage />;
   }

@@ -6,6 +6,7 @@ import { errorHandler } from './middleware/errorHandler.js';
 import projectRouter from './routes/project.js';
 import fileRouter from './routes/file.js';
 import dependencyRouter from './routes/dependency.js';
+import aiRouter from './routes/ai.js';
 import { logger } from './utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -45,6 +46,7 @@ export function createServer(options: ServerOptions): Promise<http.Server> {
   app.use('/api/project', projectRouter);
   app.use('/api/file', fileRouter);
   app.use('/api/deps', dependencyRouter);
+  app.use('/api/ai', aiRouter);
 
   // 프로덕션: 정적 파일 서빙
   if (!dev) {
