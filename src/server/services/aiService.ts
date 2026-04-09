@@ -134,13 +134,18 @@ function buildUserMessage(type: string, request: any): string {
   switch (type) {
     case 'analyze': {
       const r = request as AIAnalyzeRequest;
-      const issueList = r.matches
-        .map(
-          (m, i) =>
-            `${i + 1}. [Line ${m.line}] ${m.message}${m.aiReason ? ` (AI 분석 필요: ${m.aiReason})` : ''}`,
-        )
-        .join('\n');
-      return `파일: ${r.filePath}\n\n감지된 이슈:\n${issueList}\n\n코드:\n\`\`\`\n${r.content}\n\`\`\``;
+      const matches = r.matches ?? [];
+      if (matches.length > 0) {
+        const issueList = matches
+          .map(
+            (m, i) =>
+              `${i + 1}. [Line ${m.line}] ${m.message}${m.aiReason ? ` (AI 분석 필요: ${m.aiReason})` : ''}`,
+          )
+          .join('\n');
+        return `파일: ${r.filePath}\n\n감지된 이슈:\n${issueList}\n\n코드:\n\`\`\`\n${r.content}\n\`\`\``;
+      }
+      // matches가 없으면 전체 파일 분석
+      return `파일: ${r.filePath}\n\n코드를 분석하여 마이그레이션 시 주의할 사항을 알려주세요.\n\n코드:\n\`\`\`\n${r.content}\n\`\`\``;
     }
     case 'rewrite': {
       const r = request as AIRewriteRequest;
@@ -152,9 +157,10 @@ function buildUserMessage(type: string, request: any): string {
     }
     case 'cascade': {
       const r = request as AICascadeRequest;
-      const relatedList = r.relatedFiles
-        .map((f) => `--- ${f.path} ---\n${f.content}`)
-        .join('\n\n');
+      const relatedFiles = r.relatedFiles ?? [];
+      const relatedList = relatedFiles.length > 0
+        ? relatedFiles.map((f) => `--- ${f.path} ---\n${f.content}`).join('\n\n')
+        : '(연관 파일 없음)';
       return `변경된 파일: ${r.filePath}\n\n원본:\n\`\`\`\n${r.originalContent}\n\`\`\`\n\n변경 후:\n\`\`\`\n${r.changedContent}\n\`\`\`\n\n연관 파일:\n${relatedList}`;
     }
     case 'explain-error': {
