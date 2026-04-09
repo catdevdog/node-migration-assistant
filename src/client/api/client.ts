@@ -2,6 +2,18 @@ import type { ApiResponse, ApiError } from '@shared/types/api';
 
 const BASE_URL = '/api';
 
+/** zustand persist 저장소에서 API 키 추출 */
+function getApiKey(): string | null {
+  try {
+    const raw = localStorage.getItem('node-migrator-settings');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.state?.apiKey ?? null;
+  } catch {
+    return null;
+  }
+}
+
 class ApiClientError extends Error {
   code: string;
   constructor(code: string, message: string) {
@@ -34,8 +46,8 @@ async function request<T>(
     ...options?.headers,
   };
 
-  // localStorage에서 API 키 가져오기
-  const apiKey = localStorage.getItem('anthropic-api-key');
+  // localStorage에서 API 키 가져오기 (zustand persist 저장소)
+  const apiKey = getApiKey();
   if (apiKey) {
     headers['X-API-Key'] = apiKey;
   }

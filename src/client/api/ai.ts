@@ -30,7 +30,15 @@ export function streamAIRequest(
   },
 ): AbortController {
   const controller = new AbortController();
-  const apiKey = localStorage.getItem('anthropic-api-key') ?? '';
+  // zustand persist 저장소에서 API 키 추출
+  let apiKey = '';
+  try {
+    const raw = localStorage.getItem('node-migrator-settings');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      apiKey = parsed?.state?.apiKey ?? '';
+    }
+  } catch { /* 무시 */ }
 
   fetch(`/api/ai/${type}`, {
     method: 'POST',
