@@ -71,7 +71,7 @@ npx node-migrator ./my-project
 2. ✅ **Phase 2**: 의존성 분석기 + 위험도 테이블
 3. ✅ **Phase 3**: 규칙 기반 파일 분석 엔진
 4. ✅ **Phase 4**: 메인 파일 에디터 UI (Monaco Editor + diff)
-5. ⬜ **Phase 5**: Claude AI 연동 (AI-02~AI-08)
+5. ✅ **Phase 5**: Claude AI 연동 + 마이그레이션 가이드
 6. ⬜ **Phase 6**: 의존성 그래프 (React Flow)
 7. ⬜ **Phase 7**: 대시보드 + Git 안전망 + 리포트
 8. ⬜ **Phase 8**: 추가 기능
