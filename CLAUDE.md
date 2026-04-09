@@ -68,7 +68,7 @@ npx node-migrator ./my-project
 
 ## 8단계 구현 순서
 1. ✅ **Phase 1**: 스캐폴딩 + CLI + 온보딩 + 파일트리
-2. ⬜ **Phase 2**: 의존성 분석기 + 위험도 테이블
+2. ✅ **Phase 2**: 의존성 분석기 + 위험도 테이블
 3. ⬜ **Phase 3**: 규칙 기반 파일 분석 엔진
 4. ⬜ **Phase 4**: 메인 3단 파일 에디터 UI (핵심)
 5. ⬜ **Phase 5**: Claude AI 연동 (AI-02~AI-08)
