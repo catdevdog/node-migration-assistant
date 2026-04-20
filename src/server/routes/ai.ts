@@ -108,4 +108,7 @@ router.post('/explain-error', createSSEHandler('explain-error'));
 /** POST /api/ai/suggest-improvements  AI-07: 사전 개선 제안 (SSE) */
 router.post('/suggest-improvements', createSSEHandler('suggest-improvements'));
 
+/** POST /api/ai/dependency  AI-08: 의존성 호환성 분석 (SSE) */
+router.post('/dependency', createSSEHandler('dependency'));
+
 export default router;

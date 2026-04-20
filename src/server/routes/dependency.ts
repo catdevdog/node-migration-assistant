@@ -66,14 +66,29 @@ router.get('/audit', async (req, res, next) => {
   }
 });
 
-/** POST /api/deps/graph — import 관계 그래프 */
+/** POST /api/deps/graph — import 관계 그래프 (파일별 이슈 수 포함) */
 router.post('/graph', async (req, res, next) => {
   try {
     const projectPath = req.app.locals.projectPath as string;
+    const targetNodeVersion = String(
+      (req.body as Record<string, unknown>)?.targetNodeVersion ?? '20',
+    );
     const start = Date.now();
 
     const { analyzeImports } = await import('../services/importAnalyzer.js');
+    const { analyzeFile } = await import('../services/ruleEngine.js');
     const graph = await analyzeImports(projectPath);
+
+    // 각 노드에 파일별 이슈 수 반영
+    for (const node of graph.nodes) {
+      if (node.type !== 'file') continue;
+      try {
+        const result = await analyzeFile(projectPath, node.id, null, targetNodeVersion);
+        node.issueCount = result.summary.total;
+      } catch {
+        // 분석 실패한 파일은 이슈 수 0 유지
+      }
+    }
 
     res.json({
       data: graph,

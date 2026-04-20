@@ -3,6 +3,7 @@ import { readFile, writeFile } from '../services/fileService.js';
 import { analyzeFile } from '../services/ruleEngine.js';
 import { getAllRules } from '../rules/registry.js';
 import { logger } from '../utils/logger.js';
+import { ANALYZABLE_EXTENSIONS } from '../../shared/constants.js';
 import type { ApiResponse } from '../../shared/types/api.js';
 import type { FileContent } from '../../shared/types/project.js';
 import type { FileAnalysisResult } from '../../shared/types/analysis.js';
@@ -127,13 +128,15 @@ router.get('/rules', (_req, res) => {
   res.json(response);
 });
 
-/** POST /api/file/analyze-all — 전체 파일 일괄 분석 (SSE 진행률) */
+/** POST /api/file/analyze-all — 파일 일괄 분석 (SSE 진행률, scopePatterns으로 범위 제한 가능) */
 router.post('/analyze-all', async (req, res, next) => {
   try {
     const projectPath = req.app.locals.projectPath as string;
-    const { targetNodeVersion, currentNodeVersion } = req.body as {
+    const { targetNodeVersion, currentNodeVersion, scopePatterns } = req.body as {
       targetNodeVersion?: string;
       currentNodeVersion?: string;
+      /** 쉼표 구분 glob 패턴 (예: "src/auth/**,src/api/**"). 빈 문자열이면 전체 */
+      scopePatterns?: string;
     };
 
     // SSE 헤더
@@ -143,12 +146,28 @@ router.post('/analyze-all', async (req, res, next) => {
       'Connection': 'keep-alive',
     });
 
-    // glob으로 분석 대상 파일 수집
-    const { glob } = await import('glob');
-    const files = await glob('**/*.{js,jsx,ts,tsx,mjs,cjs}', {
-      cwd: projectPath,
-      ignore: ['node_modules/**', '.git/**', 'dist/**', 'build/**', '.next/**'],
-    });
+    // glob으로 분석 대상 파일 수집 — scopePatterns가 있으면 범위 제한
+    const { glob: globFn } = await import('glob');
+    const ignore = ['node_modules/**', '.git/**', 'dist/**', 'build/**', '.next/**'];
+    // ANALYZABLE_EXTENSIONS에서 동적 생성 (예: '.{js,jsx,ts,tsx,mjs,cjs,mts,cts}')
+    const extList = ANALYZABLE_EXTENSIONS.map((e) => e.slice(1)).join(',');
+    const ext = `.{${extList}}`;
+
+    let files: string[];
+    if (scopePatterns && scopePatterns.trim()) {
+      // 쉼표 구분 패턴을 개별 glob으로 실행 후 합침 (중복 제거)
+      const patterns = scopePatterns.split(',').map((p) => p.trim()).filter(Boolean);
+      const fileSet = new Set<string>();
+      for (const pattern of patterns) {
+        // 패턴이 ** 로 끝나면 확장자 추가, 아니면 그대로
+        const fullPattern = pattern.endsWith('**') ? `${pattern}/*${ext}` : `${pattern}${ext}`;
+        const matched = await globFn(fullPattern, { cwd: projectPath, ignore });
+        for (const f of matched) fileSet.add(f);
+      }
+      files = Array.from(fileSet);
+    } else {
+      files = await globFn(`**/*${ext}`, { cwd: projectPath, ignore });
+    }
 
     const results: FileAnalysisResult[] = [];
     const total = files.length;

@@ -107,13 +107,12 @@ export function FileScanTab() {
     useUIStore.getState().setActivePage('editor');
   }, []);
 
-  /** 단일 파일 자동 수정 적용 */
+  /** 단일 파일 자동 수정 제안 — diff 뷰로 이동, 사용자가 승인해야 적용됨 */
   const handleFixFile = useCallback(async (result: FileAnalysisResult) => {
     if (!result.fixedContent) return;
 
     await useEditorStore.getState().openFile(result.filePath);
     useEditorStore.getState().setSuggestedContent(result.filePath, result.fixedContent);
-    useEditorStore.getState().applySuggestion(result.filePath);
     useUIStore.getState().setActivePage('editor');
   }, []);
 

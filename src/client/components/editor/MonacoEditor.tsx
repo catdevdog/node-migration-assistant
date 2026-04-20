@@ -1,36 +1,41 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useEffect } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import type { editor } from 'monaco-editor';
 
 interface MonacoEditorProps {
   value: string;
   language: string;
-  readOnly?: boolean;
-  onChange?: (value: string) => void;
-  onLineClick?: (line: number) => void;
   /** 강조할 라인 번호 배열 */
   highlightLines?: Array<{ line: number; severity: 'error' | 'warning' | 'info' }>;
+  /** 에디터 인스턴스가 준비되면 호출 — 라인 이동 등 외부 제어에 사용 */
+  onEditorReady?: (editor: editor.IStandaloneCodeEditor) => void;
 }
 
-/** Monaco Editor 래퍼 — 단일 파일 편집용 */
+/**
+ * Monaco Editor 래퍼 — 항상 읽기 전용.
+ * 사용자 직접 편집은 금지되며, 코드 변경은 규칙/AI 제안의 승인 워크플로우로만 가능합니다.
+ */
 export function MonacoEditor({
   value,
   language,
-  readOnly = false,
-  onChange,
   highlightLines,
+  onEditorReady,
 }: MonacoEditorProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const decorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null);
 
-  const handleMount: OnMount = useCallback((ed) => {
+  const handleMount: OnMount = (ed) => {
     editorRef.current = ed;
+    onEditorReady?.(ed);
     applyDecorations(ed, highlightLines);
-  }, [highlightLines]);
+  };
 
-  const handleChange = useCallback((val: string | undefined) => {
-    if (val !== undefined && onChange) onChange(val);
-  }, [onChange]);
+  // highlightLines 변경 시 데코레이션 갱신
+  useEffect(() => {
+    if (editorRef.current) {
+      applyDecorations(editorRef.current, highlightLines);
+    }
+  }, [highlightLines]);
 
   // 이슈 라인 하이라이트 적용
   function applyDecorations(
@@ -67,10 +72,10 @@ export function MonacoEditor({
       language={language}
       value={value}
       theme="vs-dark"
-      onChange={handleChange}
       onMount={handleMount}
       options={{
-        readOnly,
+        readOnly: true,
+        domReadOnly: true,
         minimap: { enabled: false },
         fontSize: 13,
         lineNumbers: 'on',

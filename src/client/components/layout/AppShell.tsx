@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import { TopBar } from './TopBar';
-import { Sidebar } from './Sidebar';
 import { StatusBar } from './StatusBar';
 
 interface AppShellProps {
@@ -12,14 +11,10 @@ export function AppShell({ children }: AppShellProps) {
     <div className="flex flex-col h-screen bg-gray-900 text-gray-100">
       <TopBar />
 
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
-
-        {/* 메인 콘텐츠 영역 */}
-        <main className="flex-1 overflow-hidden bg-gray-900">
-          {children}
-        </main>
-      </div>
+      {/* 메인 콘텐츠 — Sidebar 제거, 풀 너비 */}
+      <main className="flex-1 overflow-hidden bg-gray-900">
+        {children}
+      </main>
 
       <StatusBar />
     </div>

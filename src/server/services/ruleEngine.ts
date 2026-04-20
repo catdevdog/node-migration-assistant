@@ -3,6 +3,7 @@ import semver from 'semver';
 import { parseCode } from './astService.js';
 import { getRulesForFile } from '../rules/registry.js';
 import { readFile } from './fileService.js';
+import { ANALYZABLE_EXTENSIONS } from '../../shared/constants.js';
 import type { FileAnalysisResult } from '../../shared/types/analysis.js';
 import type { RuleMatch } from '../../shared/types/rule.js';
 import type { RuleContext } from '../rules/types.js';
@@ -18,6 +19,12 @@ export async function analyzeFile(
 ): Promise<FileAnalysisResult> {
   const start = Date.now();
   const allMatches: RuleMatch[] = [];
+
+  // 확장자 필터 — 분석 대상이 아닌 파일은 즉시 빈 결과 반환
+  const ext = path.extname(relativePath).toLowerCase();
+  if (!ANALYZABLE_EXTENSIONS.includes(ext)) {
+    return buildResult(relativePath, [], undefined, Date.now() - start);
+  }
 
   // 파일 읽기
   const { content } = await readFile(projectRoot, relativePath);

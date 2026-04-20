@@ -7,9 +7,11 @@ import { useSettingsStore } from '../../stores/useSettingsStore';
 interface ApiKeyModalProps {
   open: boolean;
   onClose: () => void;
+  /** 강제 진입 모드 — true면 "건너뛰기" 버튼이 숨겨진다 */
+  required?: boolean;
 }
 
-export function ApiKeyModal({ open, onClose }: ApiKeyModalProps) {
+export function ApiKeyModal({ open, onClose, required = false }: ApiKeyModalProps) {
   const { apiKey, setApiKey } = useSettingsStore();
   const [inputKey, setInputKey] = useState(apiKey ?? '');
   const [validating, setValidating] = useState(false);
@@ -154,14 +156,23 @@ export function ApiKeyModal({ open, onClose }: ApiKeyModalProps) {
         >
           {status === 'valid' ? '시작하기' : '키 검증'}
         </Button>
-        <Button variant="ghost" onClick={handleSkip}>
-          건너뛰기
-        </Button>
+        {!required && (
+          <Button variant="ghost" onClick={handleSkip}>
+            건너뛰기
+          </Button>
+        )}
       </div>
 
-      <p className="text-xs text-gray-600 text-center mt-3">
-        건너뛰면 규칙 기반 분석만 사용할 수 있습니다. 설정에서 언제든 키를 추가할 수 있습니다.
-      </p>
+      {!required && (
+        <p className="text-xs text-gray-600 text-center mt-3">
+          건너뛰면 규칙 기반 분석만 사용할 수 있습니다. 설정에서 언제든 키를 추가할 수 있습니다.
+        </p>
+      )}
+      {required && (
+        <p className="text-xs text-gray-600 text-center mt-3">
+          AI 분석은 이 도구의 핵심 기능입니다. 계속 진행하려면 유효한 API 키가 필요합니다.
+        </p>
+      )}
     </Modal>
   );
 }

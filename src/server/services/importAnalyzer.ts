@@ -272,6 +272,7 @@ export async function analyzeImports(projectRoot: string): Promise<ImportGraph> 
   const nodes = Array.from(nodeSet).map((id) => ({
     id,
     label: path.basename(id),
+    issueCount: 0,  // 기본값; 라우트에서 분석 결과로 채워짐
     type: 'file' as const,
   }));
 

@@ -5,7 +5,8 @@ export type AIRequestType =
   | 'replace-library'   // AI-04: 라이브러리 교체 제안
   | 'cascade'           // AI-05: 연쇄 컴포넌트 영향 분석
   | 'explain-error'     // AI-06: 빌드/런타임 에러 설명
-  | 'suggest-improvements'; // AI-07: 사전 개선 제안
+  | 'suggest-improvements' // AI-07: 사전 개선 제안
+  | 'dependency';       // AI-08: 의존성 호환성 분석
 
 /** AI 분석 요청 */
 export interface AIAnalyzeRequest {
@@ -40,6 +41,23 @@ export interface AICascadeRequest {
   changedContent: string;
   originalContent: string;
   relatedFiles: { path: string; content: string }[];
+}
+
+/** AI 의존성 호환성 분석 요청 */
+export interface AIDependencyRequest {
+  /** 분석할 패키지들 (위험 패키지만 선별 전달) */
+  packages: {
+    name: string;
+    currentVersion: string;
+    latestVersion: string | null;
+    enginesNode: string | null;
+    riskLevel: string;
+    riskReason: string;
+    cveCount: number;
+    hasNativeAddon?: boolean;
+  }[];
+  currentNodeVersion?: string;
+  targetNodeVersion?: string;
 }
 
 /** AI 에러 설명 요청 */

@@ -18,6 +18,14 @@ export type DetectedFramework =
   | 'angular'
   | 'vanilla';
 
+/** Git 상태 (사전 분석에서 경고 배너용) */
+export interface ProjectGitStatus {
+  isRepo: boolean;
+  currentBranch: string | null;
+  /** 커밋되지 않은 변경사항 존재 여부 */
+  hasUncommittedChanges: boolean;
+}
+
 /** 프로젝트 메타데이터 */
 export interface ProjectInfo {
   projectPath: string;
@@ -30,6 +38,8 @@ export interface ProjectInfo {
   hasLockFile: 'npm' | 'yarn' | 'pnpm' | null;
   hasTsConfig: boolean;
   hasEslintConfig: boolean;
+  /** Git 상태 (없으면 isRepo=false) */
+  gitStatus: ProjectGitStatus;
 }
 
 /** 파일 읽기 응답 */

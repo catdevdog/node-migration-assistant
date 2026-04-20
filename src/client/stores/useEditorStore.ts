@@ -8,9 +8,9 @@ export type EditorViewMode = 'code' | 'diff';
 export interface EditorTab {
   filePath: string;
   label: string;
-  isDirty: boolean;
+  /** 디스크에 저장된 코드 (읽기 전용 표시) */
   content: string;
-  originalContent: string;
+  /** 규칙/AI가 제안한 수정안 — null이면 제안 없음 */
   suggestedContent: string | null;
   language: string;
 }
@@ -18,21 +18,22 @@ export interface EditorTab {
 interface EditorState {
   tabs: EditorTab[];
   activeTabPath: string | null;
-  /** 현재 뷰 모드: code(편집) 또는 diff(원본 vs 수정) */
+  /** 현재 뷰 모드: code(원본 표시) 또는 diff(원본 vs 제안) */
   viewMode: EditorViewMode;
-  /** 저장 중 상태 */
+  /** 승인/저장 진행 상태 */
   saving: boolean;
 
   openFile: (filePath: string) => Promise<void>;
   closeTab: (filePath: string) => void;
   setActiveTab: (filePath: string) => void;
-  updateContent: (filePath: string, content: string) => void;
   setSuggestedContent: (filePath: string, content: string) => void;
   clearSuggestedContent: (filePath: string) => void;
-  /** 수정 제안을 현재 코드에 적용 */
-  applySuggestion: (filePath: string) => void;
-  /** 파일을 서버에 저장 */
-  saveFile: (filePath: string) => Promise<void>;
+  /**
+   * 제안된 수정을 승인하여 디스크에 저장.
+   * — Monaco는 항상 읽기 전용이므로 파일 변경의 유일한 진입점.
+   * 성공 시 원본 콘텐츠가 새 코드로 갱신되고 제안은 비워집니다.
+   */
+  approveSuggestion: (filePath: string) => Promise<void>;
   /** 뷰 모드 전환 */
   setViewMode: (mode: EditorViewMode) => void;
 }
@@ -60,9 +61,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           {
             filePath,
             label,
-            isDirty: false,
             content,
-            originalContent: content,
             suggestedContent: null,
             language,
           },
@@ -71,7 +70,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         viewMode: 'code',
       }));
     } catch (err) {
-      console.error('파일 열기 ��패:', err);
+      console.error('파일 열기 실패:', err);
     }
   },
 
@@ -87,16 +86,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   setActiveTab: (filePath: string) => set({ activeTabPath: filePath }),
-
-  updateContent: (filePath: string, content: string) => {
-    set((s) => ({
-      tabs: s.tabs.map((t) =>
-        t.filePath === filePath
-          ? { ...t, content, isDirty: t.originalContent !== content }
-          : t,
-      ),
-    }));
-  },
 
   setSuggestedContent: (filePath: string, content: string) => {
     set((s) => ({
@@ -116,38 +105,37 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }));
   },
 
-  applySuggestion: (filePath: string) => {
-    set((s) => ({
-      tabs: s.tabs.map((t) => {
-        if (t.filePath !== filePath || !t.suggestedContent) return t;
-        return {
-          ...t,
-          content: t.suggestedContent,
-          suggestedContent: null,
-          isDirty: t.originalContent !== t.suggestedContent,
-        };
-      }),
-      viewMode: 'code',
-    }));
-  },
-
-  saveFile: async (filePath: string) => {
+  approveSuggestion: async (filePath: string) => {
     const tab = get().tabs.find((t) => t.filePath === filePath);
-    if (!tab || !tab.isDirty) return;
+    if (!tab || tab.suggestedContent === null) return;
+    if (tab.suggestedContent === tab.content) {
+      // 변경 사항이 없으면 제안만 비우기
+      set((s) => ({
+        tabs: s.tabs.map((t) =>
+          t.filePath === filePath ? { ...t, suggestedContent: null } : t,
+        ),
+        viewMode: 'code',
+      }));
+      return;
+    }
 
     set({ saving: true });
     try {
-      await apiClient.post('/file/write', { filePath, content: tab.content });
+      await apiClient.post('/file/write', {
+        filePath,
+        content: tab.suggestedContent,
+      });
       set((s) => ({
         tabs: s.tabs.map((t) =>
           t.filePath === filePath
-            ? { ...t, originalContent: t.content, isDirty: false }
+            ? { ...t, content: t.suggestedContent ?? t.content, suggestedContent: null }
             : t,
         ),
+        viewMode: 'code',
         saving: false,
       }));
     } catch (err) {
-      console.error('파일 저장 실패:', err);
+      console.error('파일 승인 실패:', err);
       set({ saving: false });
     }
   },

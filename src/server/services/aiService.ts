@@ -5,6 +5,7 @@ import type {
   AIRewriteRequest,
   AIReplaceLibraryRequest,
   AICascadeRequest,
+  AIDependencyRequest,
   AIExplainErrorRequest,
   AISuggestImprovementsRequest,
   AITokenUsage,
@@ -95,8 +96,9 @@ function buildSystemPrompt(
 ): string {
   const base = `Node.js 마이그레이션 전문가. 한국어로 응답.
 규칙:
-- 마크다운 문법 사용 금지 (**, ##, - 등). 평문으로 작성.
-- 수정된 코드는 반드시 \`\`\`언어 코드블록으로 제공. 파일 전체 코드를 포함할 것.
+- 설명은 마크다운 사용 가능 (볼드, 리스트, 인라인코드 등).
+- 코드 수정이 필요하면 수정된 파일 전체 코드를 하나의 코드블록(\`\`\`언어)으로 응답 마지막에 제공.
+- 중간에 부분 코드 조각이나 예시 코드블록을 넣지 말 것. 설명 내 코드 참조는 인라인코드(\`)로만.
 - 설명은 핵심만 간결하게. 불필요한 인사/서론/반복 금지.
 - Node.js 버전별 차이를 명시.`;
 
@@ -105,22 +107,35 @@ function buildSystemPrompt(
 
   const typePrompts: Record<string, string> = {
     analyze: `${base}
-Node ${current} → ${target} 마이그레이션. 이슈별로: 문제, 위험도, 수정코드 제공.`,
+Node ${current} → ${target} 마이그레이션 분석.
+이슈별 문제점과 위험도를 설명한 후, 마지막에 수정된 전체 파일 코드를 하나의 코드블록으로 제공.
+코드에 이미 적용된 수정이 있으면 반드시 유지할 것. 해당 이슈만 추가 수정.`,
 
     rewrite: `${base}
-Node ${target}에 맞게 파일 전체 재작성. 변경마다 // CHANGED: 주석. 동일 동작 보장.`,
+Node ${target}에 맞게 파일 전체를 재작성. 변경 부분마다 // CHANGED: 주석 추가. 동일 동작 보장.
+설명 후 마지막에 수정된 전체 파일 코드를 하나의 코드블록으로 제공.`,
 
     'replace-library': `${base}
-deprecated 라이브러리를 현대적 대안으로 교체. 단계별 코드 제공.`,
+deprecated 라이브러리를 현대적 대안으로 교체. 교체 방법 설명 후 수정된 전체 파일 코드를 하나의 코드블록으로 제공.`,
 
     cascade: `${base}
-파일 수정의 연쇄 영향 분석. 영향 파일별 필요 변경사항 제시.`,
+파일 수정의 연쇄 영향 분석. 영향 파일별 필요 변경사항을 구체적으로 제시.
+각 파일에 대해: 변경 필요 여부, 어떤 import/타입이 깨지는지, 수정 방법을 설명.`,
+
+    dependency: `${base}
+Node.js 의존성(npm 패키지) 호환성 분석 전문가.
+규칙:
+- 각 패키지별로: Node ${target} 호환 여부, 업그레이드 경로, breaking changes 요약.
+- 위험도가 높은 패키지부터 설명.
+- 대체 패키지가 있으면 추천 (예: request → axios/got/undici).
+- native addon이 있는 패키지는 빌드 호환성 언급.
+- 코드 수정은 필요 없으므로 코드블록 없이 설명만 제공.`,
 
     'explain-error': `${base}
-마이그레이션 에러 분석. 원인, 해결방법 코드 제공.`,
+마이그레이션 에러 분석. 원인과 해결방법 설명 후 수정된 코드를 코드블록으로 제공.`,
 
     'suggest-improvements': `${base}
-Node ${target}에서 활용 가능한 개선사항. 성능/보안/최신API 관점.`,
+Node ${target}에서 활용 가능한 개선사항. 성능/보안/최신API 관점으로 설명 후 개선된 전체 코드를 하나의 코드블록으로 제공.`,
   };
 
   return typePrompts[type] ?? base;
@@ -159,6 +174,18 @@ function buildUserMessage(type: string, request: any): string {
         ? relatedFiles.map((f) => `--- ${f.path} ---\n${f.content}`).join('\n\n')
         : '(연관 파일 없음)';
       return `변경된 파일: ${r.filePath}\n\n원본:\n\`\`\`\n${r.originalContent}\n\`\`\`\n\n변경 후:\n\`\`\`\n${r.changedContent}\n\`\`\`\n\n연관 파일:\n${relatedList}`;
+    }
+    case 'dependency': {
+      const r = request as AIDependencyRequest;
+      const pkgList = (r.packages ?? []).map((p) =>
+        `- **${p.name}** v${p.currentVersion}` +
+        (p.latestVersion ? ` (최신: ${p.latestVersion})` : '') +
+        ` | 위험: ${p.riskLevel} — ${p.riskReason}` +
+        (p.cveCount > 0 ? ` | CVE ${p.cveCount}건` : '') +
+        (p.enginesNode ? ` | engines.node: ${p.enginesNode}` : '') +
+        (p.hasNativeAddon ? ' | ⚠ native addon' : ''),
+      ).join('\n');
+      return `Node ${r.currentNodeVersion ?? '?'} → ${r.targetNodeVersion ?? '20'} 마이그레이션 시 다음 패키지의 호환성을 분석해주세요.\n\n${pkgList}`;
     }
     case 'explain-error': {
       const r = request as AIExplainErrorRequest;

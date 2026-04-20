@@ -1,8 +1,9 @@
 import fs from 'fs/promises';
 import path from 'path';
-import type { ProjectInfo, TreeNode, DetectedFramework } from '../../shared/types/project.js';
+import type { ProjectInfo, TreeNode, DetectedFramework, ProjectGitStatus } from '../../shared/types/project.js';
 import { DEFAULT_IGNORE_PATTERNS } from '../../shared/constants.js';
 import { logger } from '../utils/logger.js';
+import { getGitStatus } from './gitService.js';
 
 /** package.json에서 프레임워크 감지 */
 function detectFramework(pkg: Record<string, unknown>): DetectedFramework {
@@ -177,11 +178,20 @@ export async function loadProject(projectPath: string): Promise<{
     } catch { /* 다음 시도 */ }
   }
 
-  const [nodeVersion, lockFile, fileTree] = await Promise.all([
+  const [nodeVersion, lockFile, fileTree, rawGitStatus] = await Promise.all([
     detectNodeVersion(absolutePath, pkg),
     detectLockFile(absolutePath),
     buildTree(absolutePath, absolutePath, 5),
+    getGitStatus(absolutePath).catch(() => null),
   ]);
+
+  const gitStatus: ProjectGitStatus = rawGitStatus
+    ? {
+        isRepo: rawGitStatus.isRepo,
+        currentBranch: rawGitStatus.currentBranch,
+        hasUncommittedChanges: rawGitStatus.hasUncommittedChanges,
+      }
+    : { isRepo: false, currentBranch: null, hasUncommittedChanges: false };
 
   const projectInfo: ProjectInfo = {
     projectPath: absolutePath,
@@ -193,6 +203,7 @@ export async function loadProject(projectPath: string): Promise<{
     hasLockFile: lockFile,
     hasTsConfig,
     hasEslintConfig,
+    gitStatus,
   };
 
   logger.info(`프로젝트: ${projectInfo.projectName}`);

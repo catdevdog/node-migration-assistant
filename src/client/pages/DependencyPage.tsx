@@ -1,13 +1,11 @@
-import { useState } from 'react';
 import { Package, FileSearch, GitFork, Network } from 'lucide-react';
 import { PackageTab } from '../components/dependency/PackageTab';
 import { FileScanTab } from '../components/dependency/FileScanTab';
 import { UsageTab } from '../components/dependency/UsageTab';
 import { GraphTab } from '../components/dependency/GraphTab';
+import { useUIStore, type DependencyTabId } from '../stores/useUIStore';
 
-type TabId = 'packages' | 'scan' | 'usage' | 'graph';
-
-const TABS: { id: TabId; label: string; icon: typeof Package }[] = [
+const TABS: { id: DependencyTabId; label: string; icon: typeof Package }[] = [
   { id: 'packages', label: '패키지', icon: Package },
   { id: 'scan', label: '파일 스캔', icon: FileSearch },
   { id: 'usage', label: '사용처', icon: GitFork },
@@ -15,7 +13,8 @@ const TABS: { id: TabId; label: string; icon: typeof Package }[] = [
 ];
 
 export function DependencyPage() {
-  const [activeTab, setActiveTab] = useState<TabId>('packages');
+  const activeTab = useUIStore((s) => s.dependencyTab);
+  const setActiveTab = useUIStore((s) => s.setDependencyTab);
 
   return (
     <div className="flex flex-col h-full">

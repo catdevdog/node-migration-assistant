@@ -2,22 +2,24 @@ import { useState, useCallback } from 'react';
 import { useEditorStore } from '../stores/useEditorStore';
 import { useAnalysisStore } from '../stores/useAnalysisStore';
 import { useAIStore } from '../stores/useAIStore';
+import { useQueueStore } from '../stores/useQueueStore';
 import { MonacoEditor } from '../components/editor/MonacoEditor';
 import { MonacoDiffEditor } from '../components/editor/MonacoDiffEditor';
 import { AnalysisPanel } from '../components/analysis/AnalysisPanel';
 import { AIPanel } from '../components/ai/AIPanel';
 import { ANALYZABLE_EXTENSIONS } from '@shared/constants';
+import { useShortcuts } from '../hooks/useShortcuts';
 import {
   MousePointerClick,
   PanelRightOpen,
   PanelRightClose,
   Code,
   GitCompareArrows,
-  Save,
   Check,
   X,
   Loader2,
   Bot,
+  Lock,
 } from 'lucide-react';
 
 export function EditorPage() {
@@ -25,6 +27,9 @@ export function EditorPage() {
   const activeTab = tabs.find((t) => t.filePath === activeTabPath);
   const [showAnalysis, setShowAnalysis] = useState(true);
   const isPanelOpen = useAIStore((s) => s.isPanelOpen);
+
+  // 단축키 등록 (Ctrl+S 승인, Ctrl+] 다음 큐, Ctrl+[ 이전 큐, Ctrl+G 그래프)
+  useShortcuts();
 
   // Monaco에서 라인 이동 (분석 패널 클릭 시)
   const handleClickLine = useCallback((_line: number) => {
@@ -58,7 +63,7 @@ export function EditorPage() {
             key={tab.filePath}
             label={tab.label}
             active={tab.filePath === activeTabPath}
-            dirty={tab.isDirty}
+            hasSuggestion={tab.suggestedContent !== null}
             onClick={() => useEditorStore.getState().setActiveTab(tab.filePath)}
             onClose={() => useEditorStore.getState().closeTab(tab.filePath)}
           />
@@ -66,6 +71,14 @@ export function EditorPage() {
 
         {/* 우측 버튼 그룹 */}
         <div className="ml-auto flex items-center gap-1 px-2 shrink-0">
+          {/* 읽기 전용 표시 */}
+          <span
+            className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-gray-500 border border-gray-700 rounded"
+            title="모든 변경은 규칙/AI 제안의 승인으로만 적용됩니다."
+          >
+            <Lock size={10} /> 읽기 전용
+          </span>
+
           {/* diff 모드 토글 */}
           {hasSuggestion && (
             <div className="flex items-center border border-gray-600 rounded overflow-hidden">
@@ -74,9 +87,9 @@ export function EditorPage() {
                 className={`px-2 py-1 text-xs flex items-center gap-1 transition-colors ${
                   viewMode === 'code' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-200'
                 }`}
-                title="코드 편집"
+                title="원본 코드"
               >
-                <Code size={12} /> 편집
+                <Code size={12} /> 원본
               </button>
               <button
                 onClick={() => useEditorStore.getState().setViewMode('diff')}
@@ -88,19 +101,6 @@ export function EditorPage() {
                 <GitCompareArrows size={12} /> diff
               </button>
             </div>
-          )}
-
-          {/* 저장 버튼 */}
-          {activeTab.isDirty && (
-            <button
-              onClick={() => useEditorStore.getState().saveFile(activeTab.filePath)}
-              disabled={saving}
-              className="px-2 py-1 text-xs flex items-center gap-1 rounded bg-green-700 hover:bg-green-600 text-white disabled:opacity-50 transition-colors"
-              title="파일 저장 (Ctrl+S)"
-            >
-              {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-              저장
-            </button>
           )}
 
           {/* AI 패널 토글 */}
@@ -127,9 +127,9 @@ export function EditorPage() {
         </div>
       </div>
 
-      {/* diff 모드일 때 수정 적용/취소 바 */}
+      {/* diff 모드일 때 승인/취소 바 */}
       {viewMode === 'diff' && hasSuggestion && (
-        <DiffActionBar filePath={activeTab.filePath} />
+        <DiffActionBar filePath={activeTab.filePath} saving={saving} />
       )}
 
       {/* 메인 영역 */}
@@ -146,9 +146,6 @@ export function EditorPage() {
             <MonacoEditor
               value={activeTab.content}
               language={activeTab.language}
-              onChange={(val) =>
-                useEditorStore.getState().updateContent(activeTab.filePath, val)
-              }
               highlightLines={getHighlightLines(activeTab.filePath)}
             />
           )}
@@ -168,13 +165,23 @@ export function EditorPage() {
   );
 }
 
-/** diff 모드 액션 바 — 수정 적용 / 취소 */
-function DiffActionBar({ filePath }: { filePath: string }) {
+/** diff 모드 액션 바 — 승인 / 취소 */
+function DiffActionBar({ filePath, saving }: { filePath: string; saving: boolean }) {
+  const handleApprove = async () => {
+    await useEditorStore.getState().approveSuggestion(filePath);
+    // 큐에 등록된 파일이면 완료 처리 + 다음 항목으로
+    const queue = useQueueStore.getState();
+    if (queue.items.some((it) => it.filePath === filePath)) {
+      queue.complete(filePath);
+      queue.next();
+    }
+  };
+
   return (
     <div className="flex items-center justify-between px-4 py-2 bg-gray-800/80 border-b border-gray-700">
       <div className="text-xs text-gray-400">
         <GitCompareArrows size={14} className="inline mr-1.5" />
-        자동 수정 프리뷰 — 왼쪽: 현재 코드 / 오른쪽: 수정 제안
+        수정 제안 — 왼쪽: 현재 코드 / 오른쪽: 수정안 (승인 전까지 디스크에 반영되지 않음)
       </div>
       <div className="flex items-center gap-2">
         <button
@@ -184,10 +191,13 @@ function DiffActionBar({ filePath }: { filePath: string }) {
           <X size={12} /> 취소
         </button>
         <button
-          onClick={() => useEditorStore.getState().applySuggestion(filePath)}
-          className="px-3 py-1 text-xs rounded bg-green-700 hover:bg-green-600 text-white flex items-center gap-1 transition-colors"
+          onClick={handleApprove}
+          disabled={saving}
+          className="px-3 py-1 text-xs rounded bg-green-700 hover:bg-green-600 text-white flex items-center gap-1 transition-colors disabled:opacity-50"
+          title="승인 (Ctrl+S)"
         >
-          <Check size={12} /> 수정 적용
+          {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+          승인
         </button>
       </div>
     </div>
@@ -205,13 +215,13 @@ function getHighlightLines(filePath: string) {
 function TabItem({
   label,
   active,
-  dirty,
+  hasSuggestion,
   onClick,
   onClose,
 }: {
   label: string;
   active: boolean;
-  dirty: boolean;
+  hasSuggestion: boolean;
   onClick: () => void;
   onClose: () => void;
 }) {
@@ -228,7 +238,12 @@ function TabItem({
       onClick={onClick}
     >
       <span className="truncate max-w-[120px]">{label}</span>
-      {dirty && <span className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />}
+      {hasSuggestion && (
+        <span
+          className="w-2 h-2 rounded-full bg-purple-400 shrink-0"
+          title="수정 제안 대기 중"
+        />
+      )}
       <button
         onClick={(e) => {
           e.stopPropagation();

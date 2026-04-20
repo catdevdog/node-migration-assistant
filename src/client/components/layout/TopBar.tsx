@@ -1,85 +1,62 @@
 import {
-  PanelLeftClose,
-  PanelLeftOpen,
-  BookOpen,
-  Package,
-  FileCode,
   Settings,
+  ClipboardList,
+  Hammer,
 } from 'lucide-react';
 import { useUIStore, type ActivePage } from '../../stores/useUIStore';
 import { useProjectStore } from '../../stores/useProjectStore';
 import { useSettingsStore } from '../../stores/useSettingsStore';
-import { SUPPORTED_NODE_VERSIONS, NODE_VERSION_INFO } from '@shared/constants';
-import { Badge } from '../shared/Badge';
+import { SUPPORTED_NODE_VERSIONS } from '@shared/constants';
 
-const NAV_ITEMS: { page: ActivePage; label: string; icon: typeof FileCode }[] = [
-  { page: 'editor', label: '에디터', icon: FileCode },
-  { page: 'dependencies', label: '프로젝트', icon: Package },
-  { page: 'guide', label: '가이드', icon: BookOpen },
-  { page: 'settings', label: '설정', icon: Settings },
+const NAV_ITEMS: { page: ActivePage; label: string; icon: typeof Hammer }[] = [
+  { page: 'setup', label: '준비', icon: ClipboardList },
+  { page: 'work', label: '작업', icon: Hammer },
 ];
 
 export function TopBar() {
-  const { sidebarOpen, toggleSidebar, activePage, setActivePage } = useUIStore();
+  const { activePage, setActivePage } = useUIStore();
   const projectInfo = useProjectStore((s) => s.projectInfo);
   const { targetNodeVersion, setTargetNodeVersion } = useSettingsStore();
 
   return (
-    <header className="h-12 bg-gray-800 border-b border-gray-700 flex items-center px-3 gap-3 shrink-0">
-      {/* 사이드바 토글 */}
-      <button
-        onClick={toggleSidebar}
-        className="p-1.5 rounded hover:bg-gray-700 text-gray-400 hover:text-gray-200 transition-colors"
-        title={sidebarOpen ? '사이드바 닫기' : '사이드바 열기'}
-      >
-        {sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
-      </button>
-
+    <header className="h-10 bg-gray-800 border-b border-gray-700 flex items-center px-3 gap-3 shrink-0">
       {/* 프로젝트 이름 */}
       {projectInfo && (
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-gray-200 truncate max-w-[200px]">
-            {projectInfo.projectName}
-          </span>
-          <Badge variant="info">{projectInfo.detectedFramework}</Badge>
-        </div>
+        <span className="text-sm font-medium text-gray-300 truncate max-w-[180px]">
+          {projectInfo.projectName}
+        </span>
       )}
 
-      {/* 버전 선택 */}
+      {/* 버전 */}
       {projectInfo && (
-        <div className="flex items-center gap-1.5 ml-2 text-xs text-gray-400">
-          <span>
-            Node {projectInfo.currentNodeVersion ?? '?'}
-            {projectInfo.currentNodeVersion && NODE_VERSION_INFO[projectInfo.currentNodeVersion.split('.')[0]]?.isEOL && (
-              <span className="ml-1 text-yellow-400" title="EOL 버전">⚠</span>
-            )}
-          </span>
+        <div className="flex items-center gap-1 text-xs text-gray-500">
+          <span>Node {projectInfo.currentNodeVersion ?? '?'}</span>
           <span className="text-gray-600">→</span>
           <select
             value={targetNodeVersion}
             onChange={(e) => setTargetNodeVersion(e.target.value)}
-            className="bg-gray-700 border border-gray-600 rounded px-1.5 py-0.5 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+            className="bg-gray-700 border border-gray-600 rounded px-1 py-0.5 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
           >
             {SUPPORTED_NODE_VERSIONS.map((v) => (
               <option key={v} value={v}>
-                Node {v} LTS
+                {v}
               </option>
             ))}
           </select>
         </div>
       )}
 
-      {/* 네비게이션 */}
+      {/* 2탭 네비 */}
       <nav className="flex items-center gap-1 ml-auto">
         {NAV_ITEMS.map(({ page, label, icon: Icon }) => (
           <button
             key={page}
             onClick={() => setActivePage(page)}
             className={`
-              flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors
+              flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors
               ${activePage === page
                 ? 'bg-gray-700 text-white'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/50'
+                : 'text-gray-500 hover:text-gray-300 hover:bg-gray-700/50'
               }
             `}
           >
@@ -87,6 +64,18 @@ export function TopBar() {
             {label}
           </button>
         ))}
+
+        {/* 설정 아이콘 */}
+        <button
+          onClick={() => {
+            // 간단한 API 키 설정만 — 모달로 처리
+            useUIStore.getState().openModal('apiKey');
+          }}
+          className="ml-1 p-1.5 text-gray-500 hover:text-gray-300 hover:bg-gray-700/50 rounded transition-colors"
+          title="설정"
+        >
+          <Settings size={14} />
+        </button>
       </nav>
     </header>
   );

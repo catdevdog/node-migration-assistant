@@ -1,4 +1,5 @@
 import { FileTree } from '../file-tree/FileTree';
+import { QueuePanel } from '../queue/QueuePanel';
 import { useUIStore } from '../../stores/useUIStore';
 import { FolderTree } from 'lucide-react';
 
@@ -11,6 +12,9 @@ export function Sidebar() {
 
   return (
     <aside className="w-[280px] bg-[rgb(22,27,34)] border-r border-gray-700 flex flex-col shrink-0 h-full">
+      {/* 처리 큐 — 파일트리 위에 위치 */}
+      <QueuePanel />
+
       <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-700">
         <FolderTree size={14} className="text-gray-500" />
         <span className="text-xs font-medium text-gray-400">파일 탐색기</span>

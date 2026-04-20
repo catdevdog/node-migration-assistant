@@ -73,3 +73,12 @@
   width: 8px !important;
   height: 8px !important;
 }
+
+/* 라인 이동 시 깜박임 애니메이션 */
+@keyframes line-blink {
+  0%, 100% { background: transparent; }
+  25%, 75% { background: rgba(59, 130, 246, 0.3); }
+}
+.line-blink-highlight {
+  animation: line-blink 1.5s ease-in-out !important;
+}
