@@ -9,26 +9,36 @@ export interface ParseResult {
 
 /** 파일 내용을 AST로 파싱 */
 export function parseCode(content: string, filePath: string): ParseResult | null {
-  try {
-    const isTS =
-      filePath.endsWith('.ts') ||
-      filePath.endsWith('.tsx') ||
-      filePath.endsWith('.mts') ||
-      filePath.endsWith('.cts');
+  const isTS =
+    filePath.endsWith('.ts') ||
+    filePath.endsWith('.tsx') ||
+    filePath.endsWith('.mts') ||
+    filePath.endsWith('.cts');
+  const isJsxExt = filePath.endsWith('.tsx') || filePath.endsWith('.jsx');
 
-    const ast = parse(content, {
+  const tryParse = (jsx: boolean) =>
+    parse(content, {
       loc: true,
       range: true,
       tokens: false,
       comment: false,
-      jsx: filePath.endsWith('.tsx') || filePath.endsWith('.jsx'),
+      jsx,
       ...(isTS ? {} : { allowInvalidAST: true }),
     });
 
-    const lines = content.split('\n');
-    return { ast, lines };
-  } catch (err) {
-    logger.warn(`AST 파싱 실패: ${filePath} — ${(err as Error).message}`);
+  try {
+    // 1차 시도: 확장자 기반 jsx 옵션
+    const ast = tryParse(isJsxExt);
+    return { ast, lines: content.split('\n') };
+  } catch {
+    // 2차 시도: .js/.mjs 파일에 JSX가 포함된 경우 (CRA 등) jsx:true로 재시도
+    if (!isJsxExt && !isTS) {
+      try {
+        const ast = tryParse(true);
+        return { ast, lines: content.split('\n') };
+      } catch { /* fall through */ }
+    }
+    logger.warn(`AST 파싱 실패: ${filePath}`);
     return null;
   }
 }

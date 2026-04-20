@@ -11,6 +11,8 @@ import {
   ShieldAlert,
   ChevronDown,
   ChevronUp,
+  BookOpen,
+  Sparkles,
 } from 'lucide-react';
 import { useProjectStore } from '../stores/useProjectStore';
 import { useSettingsStore } from '../stores/useSettingsStore';
@@ -21,12 +23,33 @@ import { useDependencyStore } from '../stores/useDependencyStore';
 import { streamAIRequest } from '../api/ai';
 import type { FileAnalysisResult, ProjectScanSummary } from '@shared/types/analysis';
 import type { DepInfo } from '@shared/types/dependency';
+import type { RuleMatch } from '@shared/types/rule';
+
+/** 파일 경로 + AI 분석 결과 매치를 FileAnalysisResult 포맷으로 변환 */
+function makeGuideResult(filePath: string, matches: RuleMatch[]): FileAnalysisResult {
+  return {
+    filePath,
+    matches,
+    fixedContent: undefined,
+    duration: 0,
+    summary: {
+      total: matches.length,
+      fixable: 0,
+      needsAI: matches.length,
+      errors: matches.filter((m) => m.severity === 'error').length,
+      warnings: matches.filter((m) => m.severity === 'warning').length,
+      infos: matches.filter((m) => m.severity === 'info').length,
+    },
+  };
+}
 
 export function SetupPage() {
   const projectInfo = useProjectStore((s) => s.projectInfo);
   const targetNodeVersion = useSettingsStore((s) => s.targetNodeVersion);
   const scopePatterns = useSettingsStore((s) => s.scopePatterns);
   const setScopePatterns = useSettingsStore((s) => s.setScopePatterns);
+  const migrationGuide = useSettingsStore((s) => s.migrationGuide);
+  const setMigrationGuide = useSettingsStore((s) => s.setMigrationGuide);
   const setActivePage = useUIStore((s) => s.setActivePage);
 
   // 로컬 입력 상태 — 엔터 또는 스캔 버튼으로 확정
@@ -38,6 +61,16 @@ export function SetupPage() {
   const [scanResults, setScanResults] = useState<FileAnalysisResult[]>([]);
   const [scanSummary, setScanSummary] = useState<ProjectScanSummary | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
+
+  // 가이드 UI 상태
+  const [guideExpanded, setGuideExpanded] = useState(false);
+
+  // AI 가이드 분석 상태
+  const [guideAnalyzing, setGuideAnalyzing] = useState(false);
+  const [guideProgress, setGuideProgress] = useState({ current: 0, total: 0, file: '' });
+  // filePath → AI가 찾은 RuleMatch[] (기존 scanResults와 병합)
+  const [guideMatchMap, setGuideMatchMap] = useState<Map<string, RuleMatch[]>>(new Map());
+  const guideAbortRef = useRef<AbortController | null>(null);
 
   // 파일 선택 상태
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -84,6 +117,86 @@ export function SetupPage() {
       onDone: () => { setDepAIStreaming(false); setDepAIDone(true); },
       onError: (msg) => { setDepAIText(`❌ ${msg}`); setDepAIStreaming(false); },
     });
+  };
+
+  /** AI 가이드 기반 파일 분석 — 선택된 파일을 가이드로 검사 */
+  const runGuideAnalysis = async () => {
+    if (!projectInfo || !migrationGuide.trim()) return;
+
+    // 선택된 이슈 파일 우선, 없으면 전체 이슈 파일, 이슈도 없으면 스캔된 파일 전체 (최대 30개)
+    const selectedPaths = issueFiles
+      .filter((r) => selected.has(r.filePath))
+      .map((r) => r.filePath);
+
+    const targets = selectedPaths.length > 0
+      ? selectedPaths
+      : issueFiles.length > 0
+        ? issueFiles.map((r) => r.filePath)
+        : scanResults.slice(0, 30).map((r) => r.filePath);
+
+    if (targets.length === 0) return;
+
+    setGuideAnalyzing(true);
+    setGuideProgress({ current: 0, total: targets.length, file: '' });
+
+    const apiKey = useSettingsStore.getState().apiKey ?? '';
+    const ctrl = new AbortController();
+    guideAbortRef.current = ctrl;
+
+    try {
+      const res = await fetch('/api/ai/guide-analysis', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+        },
+        body: JSON.stringify({
+          filePaths: targets,
+          migrationGuide,
+          currentNodeVersion: projectInfo.currentNodeVersion,
+          targetNodeVersion,
+        }),
+        signal: ctrl.signal,
+      });
+
+      if (!res.ok) throw new Error(`가이드 분석 실패: ${res.status}`);
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() ?? '';
+
+        for (const part of parts) {
+          if (!part.startsWith('data: ')) continue;
+          try {
+            const data = JSON.parse(part.slice(6));
+            if (data.type === 'progress') {
+              setGuideProgress({ current: data.current, total: data.total, file: data.filePath });
+            } else if (data.type === 'file-done') {
+              const matches: RuleMatch[] = data.matches ?? [];
+              setGuideMatchMap((prev) => {
+                const next = new Map(prev);
+                const existing = next.get(data.filePath) ?? [];
+                next.set(data.filePath, [...existing, ...matches]);
+                return next;
+              });
+            }
+          } catch { /* JSON 파싱 실패 무시 */ }
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        console.error('가이드 분석 오류:', err);
+      }
+    } finally {
+      setGuideAnalyzing(false);
+    }
   };
 
   /** 위험 의존성 수 */
@@ -152,17 +265,47 @@ export function SetupPage() {
     }
   }, [projectInfo?.projectPath, targetNodeVersion]);
 
-  /** 이슈 있는 파일만 필터 + 위험도별 정렬 */
+  /** scanResults + guideMatchMap 병합 → 이슈 있는 파일만 위험도순 정렬 */
   const issueFiles = useMemo(() => {
-    return scanResults
+    const resultMap = new Map<string, FileAnalysisResult>();
+
+    // 1. 규칙 스캔 결과
+    for (const r of scanResults) {
+      resultMap.set(r.filePath, r);
+    }
+
+    // 2. AI 가이드 결과 병합
+    for (const [filePath, guideMatches] of guideMatchMap) {
+      const existing = resultMap.get(filePath);
+      if (existing) {
+        // 기존 결과에 AI 매치 추가
+        const combined = [...existing.matches, ...guideMatches];
+        resultMap.set(filePath, {
+          ...existing,
+          matches: combined,
+          summary: {
+            total: combined.length,
+            fixable: combined.filter((m) => m.fixable).length,
+            needsAI: combined.filter((m) => m.needsAI).length,
+            errors: combined.filter((m) => m.severity === 'error').length,
+            warnings: combined.filter((m) => m.severity === 'warning').length,
+            infos: combined.filter((m) => m.severity === 'info').length,
+          },
+        });
+      } else if (guideMatches.length > 0) {
+        // 규칙에서 못 잡은 파일 — AI가 새로 발견
+        resultMap.set(filePath, makeGuideResult(filePath, guideMatches));
+      }
+    }
+
+    return Array.from(resultMap.values())
       .filter((r) => r.summary.total > 0)
       .sort((a, b) => {
-        // error 먼저, 그 다음 warning, 그 다음 info
         const scoreA = a.summary.errors * 100 + a.summary.warnings * 10 + a.summary.infos;
         const scoreB = b.summary.errors * 100 + b.summary.warnings * 10 + b.summary.infos;
         return scoreB - scoreA;
       });
-  }, [scanResults]);
+  }, [scanResults, guideMatchMap]);
 
   /** 스캔 완료 후 자동 선택 (오류/경고 파일만) */
   useEffect(() => {
@@ -292,6 +435,37 @@ export function SetupPage() {
           </div>
         </div>
 
+        {/* 마이그레이션 가이드 입력 (접기/펼치기) */}
+        <div className="space-y-2">
+          <button
+            onClick={() => setGuideExpanded(!guideExpanded)}
+            className="flex items-center gap-2 text-xs text-gray-400 hover:text-gray-300 transition-colors w-full"
+          >
+            <BookOpen size={13} className="text-purple-400" />
+            <span className="font-medium">마이그레이션 가이드</span>
+            {migrationGuide.trim() && (
+              <span className="px-1.5 py-0.5 rounded bg-purple-900/40 text-purple-300 text-[10px] border border-purple-700/50">
+                작성됨
+              </span>
+            )}
+            {guideExpanded ? <ChevronUp size={12} className="ml-auto" /> : <ChevronDown size={12} className="ml-auto" />}
+          </button>
+          {guideExpanded && (
+            <div className="space-y-1.5">
+              <p className="text-[11px] text-gray-500">
+                주요 변경 사항을 자유롭게 적어주세요. AI 분석 시 이 가이드를 기반으로 코드를 검사합니다.
+              </p>
+              <textarea
+                value={migrationGuide}
+                onChange={(e) => setMigrationGuide(e.target.value)}
+                placeholder={`예시:\n- React Router v5 → v6: <Switch> → <Routes>, <Route component> → <Route element>\n- moment.js → dayjs로 교체\n- class 컴포넌트 → 함수형 + hooks 전환\n- Webpack 4 → Vite 마이그레이션`}
+                rows={6}
+                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-purple-500 resize-y font-mono leading-relaxed"
+              />
+            </div>
+          )}
+        </div>
+
         {/* 스캔 진행 */}
         {scanning && (
           <div className="flex items-center gap-2 text-xs text-gray-500">
@@ -321,23 +495,47 @@ export function SetupPage() {
         )}
 
         {/* 이슈 파일 리스트 */}
-        {issueFiles.length > 0 && !scanning && (
+        {(issueFiles.length > 0 || scanSummary) && !scanning && (
           <div className="space-y-1">
-            {/* 헤더: 전체 선택 + 카운트 */}
+            {/* 헤더: 전체 선택 + AI 가이드 분석 버튼 */}
             <div className="flex items-center gap-3 mb-2">
-              <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={selected.size === issueFiles.length && issueFiles.length > 0}
-                  onChange={toggleAll}
-                  className="accent-blue-500 w-3.5 h-3.5"
-                />
-                전체 선택
-              </label>
-              <span className="text-xs text-gray-500">
-                ({selected.size}/{issueFiles.length}개 선택)
-              </span>
+              {issueFiles.length > 0 && (
+                <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={selected.size === issueFiles.length && issueFiles.length > 0}
+                    onChange={toggleAll}
+                    className="accent-blue-500 w-3.5 h-3.5"
+                  />
+                  전체 선택
+                </label>
+              )}
+              {issueFiles.length > 0 && (
+                <span className="text-xs text-gray-500">
+                  ({selected.size}/{issueFiles.length}개 선택)
+                </span>
+              )}
+              {/* AI 가이드 분석 버튼 */}
+              {migrationGuide.trim() && (
+                <button
+                  onClick={() => { void runGuideAnalysis(); }}
+                  disabled={guideAnalyzing}
+                  title={selected.size > 0 ? `선택된 ${selected.size}개 파일 AI 분석` : '이슈 파일 AI 분석'}
+                  className="ml-auto px-3 py-1.5 rounded bg-purple-700 hover:bg-purple-600 text-white text-xs flex items-center gap-1.5 disabled:opacity-50 transition-colors"
+                >
+                  {guideAnalyzing
+                    ? <><Loader2 size={12} className="animate-spin" /> {guideProgress.current}/{guideProgress.total}</>
+                    : <><Sparkles size={12} /> AI 가이드 분석{selected.size > 0 ? ` (${selected.size})` : ''}</>
+                  }
+                </button>
+              )}
             </div>
+            {/* 가이드 분석 진행 중 파일명 표시 */}
+            {guideAnalyzing && guideProgress.file && (
+              <div className="text-[11px] text-purple-400 truncate pl-1">
+                분석 중: {guideProgress.file}
+              </div>
+            )}
 
             {/* 파일 리스트 */}
             <div className="rounded border border-gray-700 bg-gray-800/30 divide-y divide-gray-700/50 max-h-[400px] overflow-y-auto custom-scrollbar">
@@ -356,6 +554,11 @@ export function SetupPage() {
                     {r.filePath}
                   </span>
                   <div className="flex items-center gap-1.5 shrink-0">
+                    {guideMatchMap.has(r.filePath) && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-900/40 text-purple-300 border border-purple-700/50">
+                        ✨ AI
+                      </span>
+                    )}
                     {r.summary.errors > 0 && (
                       <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-900/40 text-red-400 border border-red-800/50">
                         오류 {r.summary.errors}
@@ -383,10 +586,15 @@ export function SetupPage() {
           </div>
         )}
 
-        {/* 이슈 없음 */}
-        {scanSummary && totalIssues === 0 && !scanning && (
-          <div className="text-center py-8 text-gray-500 text-sm">
-            ✓ 이슈가 발견되지 않았습니다
+        {/* 이슈 없음 안내 */}
+        {scanSummary && issueFiles.length === 0 && !scanning && (
+          <div className="text-center py-6 space-y-2">
+            <p className="text-gray-500 text-sm">✓ 규칙 기반 이슈 없음</p>
+            {!migrationGuide.trim() && (
+              <p className="text-xs text-gray-600">
+                마이그레이션 가이드를 작성하고 AI 가이드 분석을 실행해보세요.
+              </p>
+            )}
           </div>
         )}
 
