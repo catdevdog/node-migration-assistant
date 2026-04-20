@@ -20,34 +20,62 @@ function detectFramework(pkg: Record<string, unknown>): DetectedFramework {
   return 'vanilla';
 }
 
-/** .nvmrc, .node-version, package.json engines 에서 Node 버전 감지 */
+/** .nvmrc, .node-version, package.json engines/volta, .tool-versions 에서 Node 버전 감지 */
 async function detectNodeVersion(projectPath: string, pkg: Record<string, unknown> | null): Promise<string | null> {
   // 1순위: .nvmrc
   try {
-    const nvmrc = await fs.readFile(path.join(projectPath, '.nvmrc'), 'utf-8');
-    const version = nvmrc.trim().replace(/^v/i, '');
-    if (version) return version;
+    const raw = await fs.readFile(path.join(projectPath, '.nvmrc'), 'utf-8');
+    const version = raw.trim().replace(/^v/i, '');
+    if (version && /^\d/.test(version)) return version;
   } catch { /* 없으면 다음 시도 */ }
 
-  // 2순위: .node-version
+  // 2순위: .node-version (fnm, nodenv)
   try {
-    const nodeVersion = await fs.readFile(path.join(projectPath, '.node-version'), 'utf-8');
-    const version = nodeVersion.trim().replace(/^v/i, '');
-    if (version) return version;
+    const raw = await fs.readFile(path.join(projectPath, '.node-version'), 'utf-8');
+    const version = raw.trim().replace(/^v/i, '');
+    if (version && /^\d/.test(version)) return version;
   } catch { /* 없으면 다음 시도 */ }
 
-  // 3순위: package.json engines.node
+  // 3순위: .tool-versions (asdf)
+  try {
+    const raw = await fs.readFile(path.join(projectPath, '.tool-versions'), 'utf-8');
+    const match = raw.match(/^nodejs\s+([\d.]+)/m);
+    if (match) return match[1];
+  } catch { /* 없으면 다음 시도 */ }
+
+  // 4순위: package.json volta.node
+  if (pkg?.volta && typeof pkg.volta === 'object') {
+    const volta = pkg.volta as Record<string, string>;
+    if (volta.node) {
+      const version = volta.node.replace(/^v/i, '');
+      if (version && /^\d/.test(version)) return version;
+    }
+  }
+
+  // 5순위: package.json engines.node (범위 표현식에서 최솟값 추출)
   if (pkg?.engines && typeof pkg.engines === 'object') {
     const engines = pkg.engines as Record<string, string>;
     if (engines.node) {
-      // ">=18.0.0" → "18.0.0", "^20" → "20" 등 대략적 추출
-      const match = engines.node.match(/(\d+(?:\.\d+)*)/);
+      // >=12.0.0, ^14, ~16.0.0, 18.x 등에서 첫 번째 숫자 추출
+      const match = engines.node.match(/(\d+)(?:\.\d+)*/);
       if (match) return match[1];
     }
   }
 
-  // 4순위: 현재 실행 중인 Node 버전
-  return process.version.replace(/^v/, '');
+  // 6순위: package-lock.json lockfileVersion으로 npm/Node 버전 추정
+  try {
+    const raw = await fs.readFile(path.join(projectPath, 'package-lock.json'), 'utf-8');
+    const lock = JSON.parse(raw) as { lockfileVersion?: number; node?: string };
+    // lockfileVersion 1 = npm 5-6 (Node 8-10), 2 = npm 7+ (Node 15+), 3 = npm 7+ strict
+    // lock 파일에 node 필드가 있는 경우 (npm 7+)
+    if (lock.node) {
+      const version = lock.node.replace(/^v/i, '');
+      if (version && /^\d/.test(version)) return version;
+    }
+  } catch { /* 없으면 다음 시도 */ }
+
+  // 감지 실패 — null 반환 (현재 설치된 Node 버전으로 오도하지 않음)
+  return null;
 }
 
 /** Lock 파일 감지 */

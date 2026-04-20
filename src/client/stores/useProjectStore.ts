@@ -11,6 +11,8 @@ interface ProjectState {
   loadProject: () => Promise<void>;
   refreshTree: (dirPath: string) => Promise<TreeNode[]>;
   setTargetVersion: (version: string) => void;
+  /** 사용자가 수동으로 현재 Node 버전 지정 */
+  setCurrentNodeVersion: (version: string) => void;
 }
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
@@ -61,6 +63,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const info = get().projectInfo;
     if (info) {
       set({ projectInfo: { ...info, targetNodeVersion: version } });
+    }
+  },
+
+  setCurrentNodeVersion: (version: string) => {
+    const info = get().projectInfo;
+    if (info) {
+      set({ projectInfo: { ...info, currentNodeVersion: version.trim() || null } });
     }
   },
 }));
