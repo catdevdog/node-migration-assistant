@@ -10,6 +10,26 @@ import type { FileAnalysisResult } from '../../shared/types/analysis.js';
 
 const router = Router();
 
+/**
+ * 사용자 입력 패턴을 파일 glob 패턴으로 정규화
+ * - "src"        → "src/** /*${ext}"
+ * - "src/"       → "src/** /*${ext}"
+ * - "src/*"      → "src/** /*${ext}"
+ * - "src/**"     → "src/** /*${ext}"
+ * - "src/** /*"  → 그대로
+ * - "src/foo.ts" → 그대로 (확장자 있는 경우)
+ */
+function buildGlobPattern(pattern: string, ext: string): string {
+  // 후행 슬래시 / 와일드카드 제거하여 베이스 경로 추출
+  const base = pattern.replace(/[/*]+$/, '');
+
+  // 이미 파일 확장자가 명시된 패턴은 그대로 사용
+  if (/\.\w{1,5}$/.test(base)) return pattern;
+
+  // 디렉토리 패턴 → 하위 전체 재귀 검색
+  return base ? `${base}/**/*${ext}` : `**/*${ext}`;
+}
+
 /** GET /api/file/read — 파일 읽기 */
 router.get('/read', async (req, res, next) => {
   try {
@@ -159,8 +179,7 @@ router.post('/analyze-all', async (req, res, next) => {
       const patterns = scopePatterns.split(',').map((p) => p.trim()).filter(Boolean);
       const fileSet = new Set<string>();
       for (const pattern of patterns) {
-        // 패턴이 ** 로 끝나면 확장자 추가, 아니면 그대로
-        const fullPattern = pattern.endsWith('**') ? `${pattern}/*${ext}` : `${pattern}${ext}`;
+        const fullPattern = buildGlobPattern(pattern, ext);
         const matched = await globFn(fullPattern, { cwd: projectPath, ignore });
         for (const f of matched) fileSet.add(f);
       }

@@ -278,7 +278,7 @@ export function SetupPage() {
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="예: src/auth/**, src/api/** (비우면 전체)"
+              placeholder="예: src/auth, src/api (비우면 전체)"
               className="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500"
             />
             <button
