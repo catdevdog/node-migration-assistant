@@ -29,28 +29,30 @@ export async function analyzeFile(
   // 파일 읽기
   const { content } = await readFile(projectRoot, relativePath);
 
-  // AST 파싱
+  // AST 파싱 (실패해도 regex 기반 규칙은 계속 실행)
   const parsed = parseCode(content, relativePath);
-  if (!parsed) {
-    return buildResult(relativePath, [], undefined, Date.now() - start);
-  }
 
   // 적용 가능한 규칙 필터링 (확장자 + 타겟 버전)
   const allRules = getRulesForFile(relativePath);
   const rules = allRules.filter((rule) => isRuleApplicable(rule, targetNodeVersion));
 
-  // 규칙 컨텍스트 생성
+  // 규칙 컨텍스트 생성 — AST 파싱 실패 시 ast: null
   const context: RuleContext = {
     filePath: relativePath,
     content,
-    lines: parsed.lines,
-    ast: parsed.ast,
+    lines: parsed ? parsed.lines : content.split('\n'),
+    ast: parsed ? parsed.ast : null,
     currentNodeVersion,
     targetNodeVersion,
   };
 
   // 각 규칙 실행
   for (const rule of rules) {
+    // requiresAST가 명시적으로 false가 아닌 규칙(기본: AST 필요)은
+    // 파싱 실패 시 건너뜀
+    if (rule.requiresAST !== false && !parsed) {
+      continue;
+    }
     try {
       const matches = rule.detect(context);
       allMatches.push(...matches);

@@ -4,6 +4,7 @@ import type { RuleMatch } from '../../../shared/types/rule.js';
 /** String trimLeft/trimRight → trimStart/trimEnd */
 export const stringTrimRule: RuleImplementation = {
   id: 'es-syntax/string-trim',
+  requiresAST: false,
   name: 'trimLeft/trimRight deprecated',
   description: 'trimLeft/trimRight → trimStart/trimEnd 사용 권장.',
   category: 'es-syntax',

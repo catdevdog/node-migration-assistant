@@ -8,6 +8,7 @@ import type { RuleMatch } from '../../../shared/types/rule.js';
  */
 export const moduleExportsRule: RuleImplementation = {
   id: 'es-syntax/module-exports',
+  requiresAST: false,
   name: 'CommonJS module.exports 사용',
   description: 'module.exports / exports.xxx → ESM export 문으로 변환 권장.',
   category: 'es-syntax',

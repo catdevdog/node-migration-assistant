@@ -4,6 +4,7 @@ import type { RuleMatch } from '../../../shared/types/rule.js';
 /** 콜백 스타일 fs → fs/promises 전환 안내 */
 export const fsPromisesRule: RuleImplementation = {
   id: 'node-api/fs-promises',
+  requiresAST: false,
   name: '콜백 스타일 fs 사용',
   description: '콜백 기반 fs API → fs/promises 또는 fs.promises 사용 권장.',
   category: 'node-api',

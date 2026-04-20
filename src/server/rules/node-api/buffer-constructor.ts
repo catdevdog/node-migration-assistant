@@ -6,6 +6,7 @@ import type { RuleMatch } from '../../../shared/types/rule.js';
 /** new Buffer() → Buffer.alloc() / Buffer.from() */
 export const bufferConstructorRule: RuleImplementation = {
   id: 'node-api/buffer-constructor',
+  requiresAST: true,
   name: 'Buffer() 생성자 사용 금지',
   description: 'new Buffer()는 Node 6+에서 deprecated. Buffer.alloc() 또는 Buffer.from()을 사용하세요.',
   category: 'node-api',
@@ -14,6 +15,7 @@ export const bufferConstructorRule: RuleImplementation = {
 
   detect(context: RuleContext): RuleMatch[] {
     const matches: RuleMatch[] = [];
+    if (!context.ast) return matches;
 
     walkAST(context.ast, {
       [AST_NODE_TYPES.NewExpression](node) {

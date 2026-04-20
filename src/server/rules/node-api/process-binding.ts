@@ -4,6 +4,7 @@ import type { RuleMatch } from '../../../shared/types/rule.js';
 /** process.binding() 사용 감지 (자동 수정 불가) */
 export const processBindingRule: RuleImplementation = {
   id: 'node-api/process-binding',
+  requiresAST: false,
   name: 'process.binding() 사용',
   description: 'process.binding()은 internal API로 제거 예정. 공식 API로 전환 필요.',
   category: 'node-api',

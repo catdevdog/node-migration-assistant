@@ -6,6 +6,7 @@ import type { RuleMatch } from '../../../shared/types/rule.js';
 /** CommonJS require() → ES module import 감지 */
 export const cjsToEsmRule: RuleImplementation = {
   id: 'es-syntax/cjs-to-esm',
+  requiresAST: true,
   name: 'CommonJS require() 사용',
   description: 'require() → import 문으로 변환 권장. 동적 require는 AI 검토 필요.',
   category: 'es-syntax',
@@ -14,6 +15,7 @@ export const cjsToEsmRule: RuleImplementation = {
 
   detect(context: RuleContext): RuleMatch[] {
     const matches: RuleMatch[] = [];
+    if (!context.ast) return matches;
 
     walkAST(context.ast, {
       [AST_NODE_TYPES.CallExpression](node) {

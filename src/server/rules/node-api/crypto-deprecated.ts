@@ -4,6 +4,7 @@ import type { RuleMatch } from '../../../shared/types/rule.js';
 /** crypto.createCipher → crypto.createCipheriv */
 export const cryptoDeprecatedRule: RuleImplementation = {
   id: 'node-api/crypto-deprecated',
+  requiresAST: false,
   name: 'crypto deprecated API',
   description: 'crypto.createCipher/Decipher → createCipheriv/Decipheriv 사용 필요.',
   category: 'node-api',

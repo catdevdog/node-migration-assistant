@@ -6,6 +6,7 @@ import type { RuleMatch } from '../../../shared/types/rule.js';
 /** __dirname / __filename → import.meta.dirname / import.meta.filename (Node 20+) */
 export const dirnameFilenameRule: RuleImplementation = {
   id: 'node-api/dirname-filename',
+  requiresAST: true,
   name: '__dirname/__filename 사용',
   description: 'ESM에서는 __dirname/__filename 사용 불가. Node 20+에서는 import.meta.dirname 사용.',
   category: 'node-api',
@@ -15,6 +16,7 @@ export const dirnameFilenameRule: RuleImplementation = {
 
   detect(context: RuleContext): RuleMatch[] {
     const matches: RuleMatch[] = [];
+    if (!context.ast) return matches;
 
     walkAST(context.ast, {
       [AST_NODE_TYPES.Identifier](node) {

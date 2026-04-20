@@ -34,6 +34,7 @@ const DEPRECATED_UTILS: Record<string, DeprecatedUtil> = {
 /** util 모듈 deprecated 함수 감지 */
 export const utilDeprecatedRule: RuleImplementation = {
   id: 'node-api/util-deprecated',
+  requiresAST: false,
   name: 'util 모듈 deprecated 함수',
   description: 'util.isArray() 등 deprecated 함수 → 네이티브 대체 권장.',
   category: 'node-api',

@@ -9,6 +9,7 @@ import type { RuleMatch } from '../../../shared/types/rule.js';
  */
 export const urlParseRule: RuleImplementation = {
   id: 'node-api/url-parse',
+  requiresAST: false,
   name: 'url.parse() deprecated',
   description: 'url.parse()는 Node 11+에서 deprecated. new URL() 또는 URL API를 사용하세요.',
   category: 'node-api',

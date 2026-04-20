@@ -8,6 +8,7 @@ import type { RuleMatch } from '../../../shared/types/rule.js';
  */
 export const querystringDeprecatedRule: RuleImplementation = {
   id: 'node-api/querystring-deprecated',
+  requiresAST: false,
   name: 'querystring 모듈 사용',
   description: 'querystring 모듈은 legacy — URLSearchParams 사용 권장.',
   category: 'node-api',
